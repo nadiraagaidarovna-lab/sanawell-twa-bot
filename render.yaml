@@ -14,3 +14,5 @@ services:
         value: ./backend/data/sanawell.db
       - key: BOT_MODE
         value: polling
+      - key: NODE_VERSION
+        value: 22.12.0
