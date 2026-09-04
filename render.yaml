@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: sanawell-twa-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+      - key: DB_PATH
+        value: ./backend/data/sanawell.db
+      - key: BOT_MODE
+        value: polling

@@ -1,0 +1,26 @@
+{
+  "name": "sanawell-twa-bot",
+  "version": "0.1.0",
+  "description": "SanaWell — упрощённый Telegram Web App бот поддержки женщин в перименопаузе",
+  "private": true,
+  "main": "backend/src/server.js",
+  "scripts": {
+    "start": "node backend/src/server.js",
+    "dev": "node --watch backend/src/server.js",
+    "bot": "node backend/src/bot.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "overrides": {
+    "qs": "^6.16.0",
+    "form-data": "^4.0.4",
+    "tough-cookie": "^4.1.3",
+    "uuid": "^11.1.1"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

@@ -1,0 +1,356 @@
+/* SanaWell TWA — тёплая палитра терракота/крем/золото,
+   с адаптацией под тему Telegram (светлая/тёмная). */
+
+:root {
+  --sw-terracotta: #C1613F;
+  --sw-wine: #5E2A34;
+  --sw-gold: #B98B4E;
+  --sw-cream: #FAF4EA;
+
+  --bg: var(--tg-theme-bg-color, var(--sw-cream));
+  --text: var(--tg-theme-text-color, var(--sw-wine));
+  --hint: var(--tg-theme-hint-color, #8a7568);
+  --button: var(--tg-theme-button-color, var(--sw-terracotta));
+  --button-text: var(--tg-theme-button-text-color, #ffffff);
+  --secondary-bg: var(--tg-theme-secondary-bg-color, #f1e6d8);
+
+  --card-radius: 20px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  min-height: 100vh;
+  padding: 16px 16px 32px;
+}
+
+.hidden { display: none !important; }
+
+.eyebrow {
+  color: var(--sw-gold);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin: 4px 0 8px;
+}
+
+h1 {
+  font-size: 24px;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 19px;
+  margin: 12px 0 16px;
+}
+
+.body-text {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text);
+  margin: 0 0 14px;
+}
+
+.card {
+  background: var(--secondary-bg);
+  border-radius: var(--card-radius);
+  padding: 20px;
+}
+
+.welcome-card { margin-top: 12px; }
+
+.consent-box { margin: 18px 0; }
+
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--hint);
+  line-height: 1.4;
+}
+
+.consent-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--sw-terracotta);
+  flex-shrink: 0;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--button);
+  color: var(--button-text);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  width: 100%;
+  padding: 13px;
+  border: 1.5px solid var(--sw-gold);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--sw-gold);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.btn-back {
+  border: none;
+  background: none;
+  color: var(--hint);
+  font-size: 14px;
+  padding: 8px 0 16px;
+  cursor: pointer;
+}
+
+.fine-print {
+  font-size: 11.5px;
+  color: var(--hint);
+  line-height: 1.4;
+  margin-top: 14px;
+}
+
+.topbar { margin: 8px 0 18px; }
+
+.tracker-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.tracker-tile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 18px;
+  border: none;
+  border-radius: var(--card-radius);
+  background: var(--secondary-bg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tracker-tile:active { opacity: 0.75; }
+
+.tile-icon { font-size: 28px; }
+
+.tile-title {
+  display: block;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tile-sub {
+  display: block;
+  font-size: 12.5px;
+  color: var(--hint);
+}
+
+.tracker-tile > span:not(.tile-icon) { display: flex; flex-direction: column; }
+
+.options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.option-chip {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1.5px solid transparent;
+  background: var(--secondary-bg);
+  color: var(--text);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.option-chip:active { border-color: var(--sw-terracotta); }
+
+.optional-note {
+  margin-top: 8px;
+}
+
+.optional-note label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--hint);
+  margin-bottom: 6px;
+}
+
+.optional-note textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--sw-gold);
+  background: var(--bg);
+  color: var(--text);
+  padding: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+}
+
+.protocols-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.protocol-card {
+  background: var(--secondary-bg);
+  border-radius: var(--card-radius);
+  padding: 18px;
+}
+
+.protocol-card .p-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.protocol-card .p-duration {
+  font-size: 12px;
+  color: var(--sw-gold);
+  font-weight: 600;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.protocol-card ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.protocol-card li {
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.protocol-card .p-note {
+  font-size: 12.5px;
+  color: var(--hint);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.safety-card {
+  margin-top: 40px;
+  border: 1.5px solid var(--sw-terracotta);
+}
+
+.safety-resources {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 18px;
+}
+
+.safety-resource-item {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.safety-resource-item strong {
+  display: block;
+  color: var(--sw-terracotta);
+  font-size: 15px;
+}
+
+/* --- Экран выбора языка --- */
+.lang-btn {
+  margin-top: 10px;
+}
+
+.lang-switch {
+  display: flex;
+  gap: 10px;
+}
+
+.lang-switch .lang-btn {
+  margin-top: 0;
+  flex: 1;
+}
+
+/* --- Экран "Мой путь" --- */
+.progress-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 18px 0 24px;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress-row-label {
+  width: 84px;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.progress-cells {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  overflow-x: auto;
+}
+
+.progress-cell {
+  width: 16px;
+  height: 24px;
+  border-radius: 5px;
+  background: var(--secondary-bg);
+  flex-shrink: 0;
+}
+
+.progress-cell.marked {
+  background: var(--sw-terracotta);
+}
+
+.progress-section {
+  margin: 22px 0;
+}
+
+.section-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sw-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 10px;
+}
