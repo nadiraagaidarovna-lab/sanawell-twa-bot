@@ -15,4 +15,4 @@ services:
       - key: BOT_MODE
         value: polling
       - key: NODE_VERSION
-        value: 22.12.0
+        value: 24.20.0
