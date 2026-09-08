@@ -65,3 +65,102 @@ h1 {
   color: var(--text);
   margin: 0 0 14px;
 }
+
+.scales {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 20px 0 24px;
+}
+
+.scale {
+  background: var(--secondary-bg);
+  border-radius: var(--card-radius);
+  padding: 16px 18px;
+}
+
+.scale-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.scale-label {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.scale-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--sw-terracotta);
+  min-width: 28px;
+  text-align: right;
+}
+
+.scale-hint {
+  font-size: 12.5px;
+  color: var(--hint);
+  margin: 0 0 14px;
+}
+
+/* Крупный ползунок под сенсорные экраны (WCAG AA, ТЗ 9.4) — тонкий трек, но крупная
+   ручка (36px) с достаточной областью нажатия для аудитории 40+. */
+.scale-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+  cursor: pointer;
+  margin: 0;
+}
+
+.scale-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sw-terracotta);
+  border: 3px solid var(--button-text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.scale-input::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg);
+}
+
+.scale-input::-moz-range-thumb {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--button-text);
+  border-radius: 50%;
+  background: var(--sw-terracotta);
+  cursor: pointer;
+}
+
+.comment-label {
+  display: block;
+  font-size: 13px;
+  color: var(--hint);
+  margin: 0 0 8px;
+}
+
+.comment-input {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--sw-gold);
+  background: var(--bg);
+  color: var(--text);
+  padding: 12px;
+  font-size: 15px;
+  font-family: inherit;
+  resize: none;
+}

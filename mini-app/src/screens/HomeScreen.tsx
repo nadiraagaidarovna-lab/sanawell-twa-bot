@@ -51,8 +51,8 @@ export default function HomeScreen() {
   return (
     <main className="screen">
       <p className="eyebrow">SanaWell</p>
-      <h1>Как вы сегодня?</h1>
-      <p className="body-text">Нажмите «Начать чек-ин» внизу экрана.</p>
+      <h1>Здравствуйте 🤍</h1>
+      <p className="body-text">Нажмите «Начать чек-ин» внизу экрана — это займёт меньше минуты.</p>
 
       <p className="body-text" style={{ color: 'var(--hint)', fontSize: 13 }}>
         {authStatus.state === 'loading' && 'Проверяю связь с сервером…'}

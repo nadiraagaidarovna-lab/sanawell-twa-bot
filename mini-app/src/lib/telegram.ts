@@ -9,7 +9,6 @@ import {
   bindViewportCssVars,
   expandViewport,
   init as initSDK,
-  isTMA,
   miniAppReady,
   mockTelegramEnv,
   mountMiniAppSync,
@@ -60,7 +59,11 @@ export function bootstrapTelegram(): void {
   if (bootstrapped) return;
   bootstrapped = true;
 
-  if (!isTMA()) {
+  // import.meta.env.DEV, а не isTMA(): mockTelegramEnv сохраняет launch params в
+  // sessionStorage, поэтому после первой перезагрузки isTMA() уже считает нас "в Telegram"
+  // (хотя реального моста нет) и пропускает повторный мок — ложное срабатывание, актуальное
+  // только для локальной разработки. DEV — флаг сборки Vite, в проде всегда false.
+  if (import.meta.env.DEV) {
     mockEnvForLocalDev();
   }
 
