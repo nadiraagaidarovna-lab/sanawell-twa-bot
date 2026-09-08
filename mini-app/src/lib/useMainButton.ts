@@ -13,6 +13,9 @@ interface MainButtonOptions {
   onClick: () => void;
   isEnabled?: boolean;
   isLoaderVisible?: boolean;
+  /** false — скрыть кнопку целиком (например, экран уже показывает подтверждение,
+   * а не форму с основным действием). По умолчанию true. */
+  isVisible?: boolean;
 }
 
 export function useMainButton({
@@ -20,8 +23,14 @@ export function useMainButton({
   onClick,
   isEnabled = true,
   isLoaderVisible = false,
+  isVisible = true,
 }: MainButtonOptions): void {
   useEffect(() => {
+    if (!isVisible) {
+      if (setMainButtonParams.isAvailable()) setMainButtonParams({ isVisible: false });
+      return undefined;
+    }
+
     if (mountMainButton.isAvailable() && !isMainButtonMounted()) {
       mountMainButton();
     }
@@ -35,5 +44,5 @@ export function useMainButton({
       off?.();
       if (setMainButtonParams.isAvailable()) setMainButtonParams({ isVisible: false });
     };
-  }, [text, onClick, isEnabled, isLoaderVisible]);
+  }, [text, onClick, isEnabled, isLoaderVisible, isVisible]);
 }

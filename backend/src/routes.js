@@ -4,6 +4,24 @@ const db = require('./db');
 const { getAllProtocols, getProtocolsForModule } = require('./protocols');
 const { detectRiskTrigger, getSafetyResources } = require('./safety');
 
+// "Исправить" доступна в течение 24 часов после ПЕРВОЙ отправки чек-ина за день (ТЗ 6.3.4).
+// Т.к. чек-ин — одна запись в день, это на практике совпадает с "тот же Алматинский день"
+// почти всегда; исключение — чек-ин у самой границы полуночи, который в ТЗ отдельно не
+// оговорён и не стоит того, чтобы усложнять модель "один чек-ин = один день".
+const CHECKIN_CORRECTION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function shapeCheckin(row) {
+  if (!row) return null;
+  const createdAt = new Date(`${row.created_at.replace(' ', 'T')}Z`);
+  return {
+    sleepScore: row.sleep_score,
+    moodScore: row.mood_score,
+    memoryScore: row.memory_score,
+    comment: row.comment,
+    canCorrect: Date.now() - createdAt.getTime() < CHECKIN_CORRECTION_WINDOW_MS,
+  };
+}
+
 function buildRouter({ requireAuth }) {
   const router = express.Router();
 
@@ -67,6 +85,13 @@ function buildRouter({ requireAuth }) {
   // /track выше (старый 3-кнопочный трекер): одна запись в день, числовая шкала 1-10.
   // Без LLM-обработки (извлечение тем, safety_flag) — это явно Этап 2 по разделу 16 ТЗ,
   // здесь safety_flag остаётся false-заглушкой из схемы БД.
+
+  // Чек-ин за сегодня, если уже отправлен — экран использует это при загрузке, чтобы
+  // показать подтверждение + "Исправить" вместо пустой формы (ТЗ 6.3.4).
+  router.get('/checkin', requireAuth, (req, res) => {
+    res.json({ checkin: shapeCheckin(db.getTodayCheckin(req.telegramId)) });
+  });
+
   router.post('/checkin', requireAuth, (req, res) => {
     const { sleep, mood, memory, comment } = req.body || {};
     const scores = { sleep, mood, memory };
@@ -82,14 +107,14 @@ function buildRouter({ requireAuth }) {
     }
 
     db.touchUser(req.telegramId);
-    const result = db.upsertDailyCheckin(req.telegramId, {
+    db.upsertDailyCheckin(req.telegramId, {
       sleep,
       mood,
       memory,
       comment: comment ? comment.slice(0, 1000) : null,
     });
 
-    res.json({ ok: true, date: result.date, correctedManually: result.correctedManually });
+    res.json({ ok: true, checkin: shapeCheckin(db.getTodayCheckin(req.telegramId)) });
   });
 
   // История последних отметок (сырые записи)

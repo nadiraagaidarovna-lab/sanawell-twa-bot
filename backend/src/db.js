@@ -197,10 +197,6 @@ function upsertDailyCheckin(telegramId, { sleep, mood, memory, comment }) {
   const date = almatyDateString(new Date());
   const now = new Date().toISOString();
 
-  const existing = db
-    .prepare(`SELECT id FROM daily_checkins WHERE telegram_id = ? AND checkin_date = ?`)
-    .get(String(telegramId), date);
-
   db.prepare(
     `INSERT INTO daily_checkins
        (telegram_id, checkin_date, sleep_score, mood_score, memory_score, comment, updated_at)
@@ -213,8 +209,17 @@ function upsertDailyCheckin(telegramId, { sleep, mood, memory, comment }) {
        corrected_manually = 1,
        updated_at = excluded.updated_at`
   ).run(String(telegramId), date, sleep, mood, memory, comment ?? null, now);
+}
 
-  return { date, correctedManually: !!existing };
+// Чек-ин за сегодня (если есть) — экран чек-ина использует это при загрузке, чтобы решить,
+// показывать пустую форму или уже сохранённые ответы + "Исправить" (Срез 5, ТЗ 6.3.4).
+function getTodayCheckin(telegramId) {
+  const date = almatyDateString(new Date());
+  return (
+    db
+      .prepare(`SELECT * FROM daily_checkins WHERE telegram_id = ? AND checkin_date = ?`)
+      .get(String(telegramId), date) || null
+  );
 }
 
 function insertSafetyEvent(telegramId, triggerType) {
@@ -252,6 +257,7 @@ module.exports = {
   getRecentLogs,
   getProgressGrid,
   upsertDailyCheckin,
+  getTodayCheckin,
   insertSafetyEvent,
   getUsersDueForReminder,
   markReminderSent,
