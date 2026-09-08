@@ -66,6 +66,74 @@ h1 {
   margin: 0 0 14px;
 }
 
+.lang-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.lang-toggle button {
+  border: none;
+  background: transparent;
+  color: var(--hint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.lang-toggle button.active {
+  background: var(--secondary-bg);
+  color: var(--sw-terracotta);
+}
+
+.swipe-cards {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.swipe-cards::-webkit-scrollbar {
+  display: none;
+}
+
+.swipe-card {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  box-sizing: border-box;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-right: 4px;
+}
+
+.swipe-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.swipe-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--secondary-bg);
+  transition: width 0.2s, border-radius 0.2s;
+}
+
+.swipe-dot.active {
+  background: var(--sw-terracotta);
+  width: 18px;
+  border-radius: 4px;
+}
+
 .btn-secondary {
   width: 100%;
   padding: 13px;

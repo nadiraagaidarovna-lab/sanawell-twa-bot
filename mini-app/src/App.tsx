@@ -1,8 +1,9 @@
-// App.tsx — Срез 1: каркас навигации. NavigationProvider держит стек экранов,
+// App.tsx — каркас навигации. NavigationProvider держит стек экранов,
 // Screens подписывает нативную BackButton на "назад по стеку".
 import { NavigationProvider } from './lib/navigation';
 import { useNavigation } from './lib/useNavigation';
 import { useBackButton } from './lib/useBackButton';
+import WelcomeScreen from './screens/WelcomeScreen';
 import HomeScreen from './screens/HomeScreen';
 import CheckinScreen from './screens/CheckinScreen';
 
@@ -15,8 +16,10 @@ function Screens() {
     case 'checkin':
       return <CheckinScreen />;
     case 'home':
-    default:
       return <HomeScreen />;
+    case 'welcome':
+    default:
+      return <WelcomeScreen />;
   }
 }
 
