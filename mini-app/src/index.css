@@ -1,0 +1,42 @@
+/* Базовая тема — системная тема Telegram (--tg-theme-*), см. ТЗ раздел 4.2/12.
+   Бренд-палитра SanaWell — только акценты (заголовки-эйбрау, кнопки, графики),
+   не базовый фон. Вне Telegram (обычный браузер) переменные --tg-theme-* ещё не
+   заданы SDK, поэтому у каждой есть SanaWell-фоллбэк того же оттенка, что и в
+   существующем vanilla-трекере (sanawell-twa-bot/frontend/style.css) — визуальная
+   согласованность между старым трекером и новым Mini App. */
+
+:root {
+  --sw-terracotta: #c1613f;
+  --sw-wine: #5e2a34;
+  --sw-gold: #b98b4e;
+  --sw-cream: #faf4ea;
+
+  --bg: var(--tg-theme-bg-color, var(--sw-cream));
+  --text: var(--tg-theme-text-color, var(--sw-wine));
+  --hint: var(--tg-theme-hint-color, #8a7568);
+  --button: var(--tg-theme-button-color, var(--sw-terracotta));
+  --button-text: var(--tg-theme-button-text-color, #ffffff);
+  --secondary-bg: var(--tg-theme-secondary-bg-color, #f1e6d8);
+
+  --card-radius: 20px;
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  min-height: 100vh;
+}
