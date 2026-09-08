@@ -18,17 +18,23 @@ import {
   retrieveRawInitData,
 } from '@telegram-apps/sdk';
 
-// Тестовые launch params для разработки вне Telegram. hash заведомо невалиден для реальной
-// HMAC-проверки на бэкенде (см. backend/src/telegramAuth.js в соседнем sanawell-twa-bot/backend) —
-// это ожидаемо: локальный браузер вне Telegram не должен проходить настоящую аутентификацию,
-// это будет отдельно проверено внутри самого Telegram на Срезе 2.
+// Тестовые launch params для разработки вне Telegram. По умолчанию hash заведомо невалиден
+// для реальной HMAC-проверки на бэкенде (backend/src/telegramAuth.js) — этого достаточно
+// для экранов, которые ничего не запрашивают у API (Срезы 0-1). Если задан
+// VITE_MOCK_INIT_DATA (mini-app/.env.local, не коммитится) — это по-настоящему подписанная
+// initData, сгенерированная реальным BOT_TOKEN, и запросы к бэкенду проходят HMAC-проверку
+// по-настоящему, без необходимости открывать приложение внутри самого Telegram.
 function mockEnvForLocalDev() {
-  const initDataRaw = new URLSearchParams([
-    ['user', JSON.stringify({ id: 1, first_name: 'Dev', language_code: 'ru' })],
-    ['auth_date', String(Math.floor(Date.now() / 1000))],
-    ['signature', 'mock-signature-local-dev-only'],
-    ['hash', 'mock-hash-local-dev-only-not-a-real-signature'],
-  ]);
+  const signedInitData = import.meta.env.VITE_MOCK_INIT_DATA as string | undefined;
+
+  const initDataRaw = signedInitData
+    ? new URLSearchParams(signedInitData)
+    : new URLSearchParams([
+        ['user', JSON.stringify({ id: 1, first_name: 'Dev', language_code: 'ru' })],
+        ['auth_date', String(Math.floor(Date.now() / 1000))],
+        ['signature', 'mock-signature-local-dev-only'],
+        ['hash', 'mock-hash-local-dev-only-not-a-real-signature'],
+      ]);
 
   mockTelegramEnv({
     launchParams: {
