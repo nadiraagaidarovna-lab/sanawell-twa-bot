@@ -4,6 +4,11 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Сервер (backend/src/server.js) отдаёт эту сборку по подпути /checkin, а не с корня
+  // домена — на нём же по "/" живёт старый vanilla-трекер (frontend/). base заставляет
+  // собранный index.html ссылаться на /checkin/assets/... вместо /assets/...,
+  // иначе ассеты запрашивались бы с корня и не совпали бы с точкой монтирования.
+  base: '/checkin/',
   server: {
     // Проксируем /api на уже работающий Express-бэкенд (см. ../backend/src/server.js),
     // а не разрешаем CORS отдельно: в проде (Срез 6) сборка mini-app будет отдаваться
