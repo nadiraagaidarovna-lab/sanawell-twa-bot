@@ -51,6 +51,28 @@ db.exec(`
     trigger_type TEXT NOT NULL,
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- Mini App: ежедневный чек-ин (ТЗ-v2.1.md, раздел 11 "DailyCheckin") — отдельная
+  -- сущность от старого 3-кнопочного трекера (logs выше): здесь одна запись в день
+  -- на пользователя, с числовой шкалой 1-10 по каждому измерению, а не свободные
+  -- отметки по символьному коду. safety_flag — заглушка (false) на Этапе 1; реальная
+  -- LLM-проверка кризисных маркеров — Этап 2 (см. CLAUDE.md: без review гинеколога
+  -- финальные формулировки не хардкодить).
+  CREATE TABLE IF NOT EXISTS daily_checkins (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id        TEXT NOT NULL,
+    checkin_date       TEXT NOT NULL,
+    sleep_score        INTEGER NOT NULL CHECK(sleep_score BETWEEN 1 AND 10),
+    mood_score         INTEGER NOT NULL CHECK(mood_score BETWEEN 1 AND 10),
+    memory_score       INTEGER NOT NULL CHECK(memory_score BETWEEN 1 AND 10),
+    comment            TEXT,
+    safety_flag        INTEGER NOT NULL DEFAULT 0,
+    corrected_manually INTEGER NOT NULL DEFAULT 0,
+    created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at         TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(telegram_id, checkin_date),
+    FOREIGN KEY (telegram_id) REFERENCES users(telegram_id)
+  );
 `);
 
 // Мягкая миграция для БД, созданных до Модуля 4/5 (v1 схема без этих колонок).
@@ -167,6 +189,34 @@ function getProgressGrid(telegramId, days = 14) {
   return { dates, grid };
 }
 
+// Одна запись в день на пользователя (ТЗ раздел 11) — повторная отправка в тот же
+// Алматинский день обновляет ту же строку и помечает её corrected_manually (основа для
+// "Исправить" из Среза 5, а не отдельная бизнес-логика здесь — естественное следствие
+// upsert по (telegram_id, checkin_date)).
+function upsertDailyCheckin(telegramId, { sleep, mood, memory, comment }) {
+  const date = almatyDateString(new Date());
+  const now = new Date().toISOString();
+
+  const existing = db
+    .prepare(`SELECT id FROM daily_checkins WHERE telegram_id = ? AND checkin_date = ?`)
+    .get(String(telegramId), date);
+
+  db.prepare(
+    `INSERT INTO daily_checkins
+       (telegram_id, checkin_date, sleep_score, mood_score, memory_score, comment, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(telegram_id, checkin_date) DO UPDATE SET
+       sleep_score = excluded.sleep_score,
+       mood_score = excluded.mood_score,
+       memory_score = excluded.memory_score,
+       comment = excluded.comment,
+       corrected_manually = 1,
+       updated_at = excluded.updated_at`
+  ).run(String(telegramId), date, sleep, mood, memory, comment ?? null, now);
+
+  return { date, correctedManually: !!existing };
+}
+
 function insertSafetyEvent(telegramId, triggerType) {
   return db
     .prepare(`INSERT INTO safety_events (telegram_id, trigger_type) VALUES (?, ?)`)
@@ -201,6 +251,7 @@ module.exports = {
   insertLog,
   getRecentLogs,
   getProgressGrid,
+  upsertDailyCheckin,
   insertSafetyEvent,
   getUsersDueForReminder,
   markReminderSent,

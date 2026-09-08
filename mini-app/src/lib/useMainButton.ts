@@ -12,15 +12,21 @@ interface MainButtonOptions {
   text: string;
   onClick: () => void;
   isEnabled?: boolean;
+  isLoaderVisible?: boolean;
 }
 
-export function useMainButton({ text, onClick, isEnabled = true }: MainButtonOptions): void {
+export function useMainButton({
+  text,
+  onClick,
+  isEnabled = true,
+  isLoaderVisible = false,
+}: MainButtonOptions): void {
   useEffect(() => {
     if (mountMainButton.isAvailable() && !isMainButtonMounted()) {
       mountMainButton();
     }
     if (setMainButtonParams.isAvailable()) {
-      setMainButtonParams({ text, isVisible: true, isEnabled });
+      setMainButtonParams({ text, isVisible: true, isEnabled, isLoaderVisible });
     }
 
     const off = onMainButtonClick.isAvailable() ? onMainButtonClick(onClick) : undefined;
@@ -29,5 +35,5 @@ export function useMainButton({ text, onClick, isEnabled = true }: MainButtonOpt
       off?.();
       if (setMainButtonParams.isAvailable()) setMainButtonParams({ isVisible: false });
     };
-  }, [text, onClick, isEnabled]);
+  }, [text, onClick, isEnabled, isLoaderVisible]);
 }

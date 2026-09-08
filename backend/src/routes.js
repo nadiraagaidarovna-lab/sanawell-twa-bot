@@ -63,6 +63,35 @@ function buildRouter({ requireAuth }) {
     });
   });
 
+  // Ежедневный чек-ин Mini App (ТЗ-v2.1.md, разделы 5.1/6.3/11) — отдельная сущность от
+  // /track выше (старый 3-кнопочный трекер): одна запись в день, числовая шкала 1-10.
+  // Без LLM-обработки (извлечение тем, safety_flag) — это явно Этап 2 по разделу 16 ТЗ,
+  // здесь safety_flag остаётся false-заглушкой из схемы БД.
+  router.post('/checkin', requireAuth, (req, res) => {
+    const { sleep, mood, memory, comment } = req.body || {};
+    const scores = { sleep, mood, memory };
+
+    const scoresValid = Object.values(scores).every(
+      (v) => Number.isInteger(v) && v >= 1 && v <= 10
+    );
+    if (!scoresValid) {
+      return res.status(400).json({ error: 'invalid_payload' });
+    }
+    if (comment !== undefined && comment !== null && typeof comment !== 'string') {
+      return res.status(400).json({ error: 'invalid_payload' });
+    }
+
+    db.touchUser(req.telegramId);
+    const result = db.upsertDailyCheckin(req.telegramId, {
+      sleep,
+      mood,
+      memory,
+      comment: comment ? comment.slice(0, 1000) : null,
+    });
+
+    res.json({ ok: true, date: result.date, correctedManually: result.correctedManually });
+  });
+
   // История последних отметок (сырые записи)
   router.get('/history', requireAuth, (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 30, 100);
