@@ -12,8 +12,10 @@ services:
         sync: false
       - key: WEBAPP_URL
         sync: false
-      - key: DB_PATH
-        value: ./backend/data/sanawell.db
+      # Postgres на Neon (free-тир, без карты, см. README "Почему Postgres (Neon)") — connection
+      # string секретный, sync: false как у BOT_TOKEN/WEBAPP_URL: задать вручную в Render Dashboard.
+      - key: DATABASE_URL
+        sync: false
       - key: BOT_MODE
         value: polling
       # Защитный сценарий выключен, пока текст/триггеры не утвердит гинеколог-соучредитель
