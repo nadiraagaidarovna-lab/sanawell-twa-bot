@@ -106,7 +106,11 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
       return res.status(400).json({ error: 'invalid_payload' });
     }
 
-    db.touchUser(req.telegramId);
+    // touchOrCreateUser, не touchUser: на /checkin/ пользователь может дойти сюда, ни разу
+    // не вызвав /language или /consent (там пока нет экранов онбординга/языка) — обычный
+    // touchUser (UPDATE) в этом случае не создаёт строку в users, и INSERT ниже падает по
+    // FOREIGN KEY. Найдено при добавлении /checkin/history (Срез А1, ТЗ 5.2/6.4).
+    db.touchOrCreateUser(req.telegramId);
     db.upsertDailyCheckin(req.telegramId, {
       sleep,
       mood,

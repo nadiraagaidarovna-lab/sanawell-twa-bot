@@ -253,6 +253,7 @@ module.exports = {
   upsertUserConsent,
   setReminderOptIn,
   touchUser,
+  touchOrCreateUser,
   insertLog,
   getRecentLogs,
   getProgressGrid,
