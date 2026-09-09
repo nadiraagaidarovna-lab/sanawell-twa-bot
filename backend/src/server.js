@@ -11,14 +11,16 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 
 app.use(express.json());
 
-// Отдаём статику старого vanilla-трекера (frontend/) с корня — как и раньше, не трогаем.
-app.use(express.static(path.join(__dirname, '..', '..', 'frontend')));
-
-// Новый Mini App (React + @telegram-apps/sdk, mini-app/) — на отдельном подпути, а не
-// вместо старого трекера ("дополняет, не заменяет", ТЗ раздел 4). Собранный index.html
-// ссылается на /checkin/assets/... (см. mini-app/vite.config.ts: base: '/checkin/'),
-// поэтому именно на этом префиксе и монтируем — иначе ассеты не найдутся.
+// Mini App (React + @telegram-apps/sdk, mini-app/) — единственный главный экран (Срез В
+// консолидации, CLAUDE.md 4.3.1). Собранный index.html ссылается на /checkin/assets/...
+// (см. mini-app/vite.config.ts: base: '/checkin/'), поэтому монтируем именно на этом
+// префиксе — иначе ассеты не найдутся.
 app.use('/checkin', express.static(path.join(__dirname, '..', '..', 'mini-app', 'dist')));
+
+// Старый vanilla-трекер (frontend/) упразднён — редирект на случай уже открытых вкладок
+// или закэшированных в клиенте Telegram ссылок на корень, чтобы женщина не видела
+// пустую/сломанную страницу вместо главного экрана.
+app.get('/', (_req, res) => res.redirect('/checkin/'));
 
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 

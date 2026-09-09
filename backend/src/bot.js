@@ -21,7 +21,6 @@ const TEXT = {
       'Здесь никто вас не увидит и не осудит. Просто нажмите кнопку ниже — и разберёмся вместе, шаг за шагом.',
     ].join('\n'),
     open: 'Открыть',
-    checkin: 'Ежедневный чек-ин',
     reminder: 'Как прошёл день? Если хочется — загляните и отметьте, как вы 🤍',
     disable: 'Отключить',
     disabled: 'Хорошо, больше не будем писать. Бот всегда открыт, когда захотите вернуться сами.',
@@ -37,7 +36,6 @@ const TEXT = {
       'Мұнда сізді ешкім көрмейді және айыптамайды. Төмендегі батырманы басыңыз — бірге, қадам-қадаммен шешеміз.',
     ].join('\n'),
     open: 'Ашу',
-    checkin: 'Күнделікті чек-ин',
     reminder: 'Күніңіз қалай өтті? Қаласаңыз, кіріп, қалай екеніңізді белгілеңіз 🤍',
     disable: 'Өшіру',
     disabled: 'Жақсы, енді жазбаймыз. Бот сіз өзіңіз қайта оралғыңыз келгенде әрқашан ашық.',
@@ -76,6 +74,11 @@ function startBot({
 
   const bot = new TelegramBot(botToken, { polling: botMode === 'polling' });
 
+  // Срез В консолидации (CLAUDE.md 4.3.1) — /checkin/ теперь единственный главный экран,
+  // старый маршрут / упразднён (server.js редиректит его на /checkin/ на случай, если
+  // где-то остался закэшированный урл, но новые ссылки должны вести сюда напрямую).
+  const checkinUrl = `${webAppUrl}/checkin`;
+
   bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     // Язык ещё не выбран на этом этапе (выбор — первый экран самого Web App, ТЗ 5.1),
@@ -83,17 +86,9 @@ function startBot({
     const text = `${TEXT.ru.welcome}\n\n— — —\n\n${TEXT.kk.welcome}`;
     bot.sendMessage(chatId, text, {
       reply_markup: {
-        // Старый 3-кнопочный трекер и новый Mini App с чек-ином — рядом, второй не
-        // заменяет первый (ТЗ раздел 4: "дополняет уже существующий трекер, не заменяет").
-        inline_keyboard: [
-          [{ text: `${TEXT.ru.open} / ${TEXT.kk.open}`, web_app: { url: webAppUrl } }],
-          [
-            {
-              text: `${TEXT.ru.checkin} / ${TEXT.kk.checkin}`,
-              web_app: { url: `${webAppUrl}/checkin` },
-            },
-          ],
-        ],
+        // Единственная кнопка (ТЗ 4.3/4.4/6.2, v2.6+) — весь функционал, включая чек-ин,
+        // живёт на одном главном экране Mini App, не за отдельной кнопкой в чате.
+        inline_keyboard: [[{ text: `${TEXT.ru.open} / ${TEXT.kk.open}`, web_app: { url: checkinUrl } }]],
       },
     });
   });
@@ -133,7 +128,7 @@ function startBot({
           reply_markup: {
             inline_keyboard: [
               [
-                { text: TEXT[lang].open, web_app: { url: webAppUrl } },
+                { text: TEXT[lang].open, web_app: { url: checkinUrl } },
                 { text: TEXT[lang].disable, callback_data: 'disable_reminder' },
               ],
             ],
