@@ -89,6 +89,30 @@ h1 {
   color: var(--sw-terracotta);
 }
 
+.settings-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--secondary-bg);
+}
+
+.settings-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--hint);
+  margin: 0 0 8px;
+}
+
+.reminder-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  margin-top: 12px;
+}
+
 .swipe-cards {
   display: flex;
   overflow-x: auto;

@@ -20,9 +20,21 @@ type AuthStatus =
   | { state: 'ok'; me: MeResponse }
   | { state: 'error'; message: string };
 
+type Lang = 'ru' | 'kk';
+
 export default function HomeScreen() {
   const { push } = useNavigation();
   const [authStatus, setAuthStatus] = useState<AuthStatus>({ state: 'loading' });
+
+  // Срез Г консолидации (CLAUDE.md 4.3.1) — временный контрол смены языка и напоминаний
+  // прямо на /checkin/, поверх уже существующих /api/language и /api/reminder-opt-in.
+  // До сих пор это можно было сделать только на экране "Мой путь" старого маршрута /,
+  // который срез В упраздняет — без этого контрола женщина осталась бы без способа сменить
+  // язык или заново включить напоминания. ВРЕМЕННО: полноценный выбор языка по ТЗ должен
+  // жить в онбординге (раздел 6.2, шаг 3, вопрос о пути + согласия) — когда тот срез будет
+  // сделан, этот блок стоит убрать или заменить.
+  const [lang, setLang] = useState<Lang | null>(null);
+  const [reminderOptIn, setReminderOptIn] = useState(false);
 
   useMainButton({
     text: 'Начать чек-ин',
@@ -34,7 +46,10 @@ export default function HomeScreen() {
 
     apiFetch<MeResponse>('/me')
       .then((me) => {
-        if (!cancelled) setAuthStatus({ state: 'ok', me });
+        if (cancelled) return;
+        setAuthStatus({ state: 'ok', me });
+        setLang(me.language === 'kk' ? 'kk' : 'ru');
+        setReminderOptIn(me.reminderOptIn);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -47,6 +62,25 @@ export default function HomeScreen() {
       cancelled = true;
     };
   }, []);
+
+  const handleLangChange = (next: Lang) => {
+    setLang(next);
+    apiFetch('/language', { method: 'POST', body: JSON.stringify({ language: next }) }).catch(
+      () => {
+        // Не блокируем UI сетевой ошибкой — значение переключится обратно при следующей
+        // успешной загрузке /me, попытка не потеряна безвозвратно для пользователя.
+      }
+    );
+  };
+
+  const handleReminderToggle = (checked: boolean) => {
+    setReminderOptIn(checked);
+    apiFetch('/reminder-opt-in', { method: 'POST', body: JSON.stringify({ optIn: checked }) }).catch(
+      () => {
+        // аналогично — не блокируем UI
+      }
+    );
+  };
 
   return (
     <main className="screen">
@@ -67,6 +101,37 @@ export default function HomeScreen() {
       <button type="button" className="btn-secondary" onClick={() => push('techniques')}>
         Все техники самопомощи
       </button>
+
+      {authStatus.state === 'ok' && lang && (
+        <div className="settings-section">
+          <p className="settings-label">Язык / Тіл</p>
+          <div className="lang-toggle">
+            <button
+              type="button"
+              className={lang === 'ru' ? 'active' : ''}
+              onClick={() => handleLangChange('ru')}
+            >
+              RU
+            </button>
+            <button
+              type="button"
+              className={lang === 'kk' ? 'active' : ''}
+              onClick={() => handleLangChange('kk')}
+            >
+              KK
+            </button>
+          </div>
+
+          <label className="reminder-toggle-row">
+            <input
+              type="checkbox"
+              checked={reminderOptIn}
+              onChange={(e) => handleReminderToggle(e.target.checked)}
+            />
+            <span>Напоминание вечером</span>
+          </label>
+        </div>
+      )}
     </main>
   );
 }
