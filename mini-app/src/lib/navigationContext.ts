@@ -1,6 +1,6 @@
 import { createContext } from 'react';
 
-export type ScreenId = 'welcome' | 'home' | 'checkin' | 'progress';
+export type ScreenId = 'welcome' | 'home' | 'checkin' | 'progress' | 'techniques';
 
 export interface NavigationContextValue {
   screen: ScreenId;

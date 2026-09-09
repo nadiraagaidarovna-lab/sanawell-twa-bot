@@ -64,6 +64,9 @@ export default function HomeScreen() {
       <button type="button" className="btn-secondary" onClick={() => push('progress')}>
         Мой путь
       </button>
+      <button type="button" className="btn-secondary" onClick={() => push('techniques')}>
+        Все техники самопомощи
+      </button>
     </main>
   );
 }
