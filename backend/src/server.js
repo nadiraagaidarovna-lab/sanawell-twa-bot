@@ -22,7 +22,15 @@ app.use('/checkin', express.static(path.join(__dirname, '..', '..', 'mini-app', 
 
 app.get('/healthz', (_req, res) => res.json({ ok: true }));
 
-app.use('/api', buildRouter({ requireAuth: requireTelegramAuth(BOT_TOKEN) }));
+// Защитный сценарий (CLAUDE.md, раздел "Защитный сценарий") — выключен по умолчанию,
+// пока список триггеров и текст кризисного сообщения не утвердит гинеколог-соучредитель.
+// Включать явной переменной окружения, не хардкодом true.
+const SAFETY_PROTOCOL_ENABLED = process.env.SAFETY_PROTOCOL_ENABLED === 'true';
+
+app.use(
+  '/api',
+  buildRouter({ requireAuth: requireTelegramAuth(BOT_TOKEN), safetyProtocolEnabled: SAFETY_PROTOCOL_ENABLED })
+);
 
 // Единый обработчик ошибок: никогда не отдаём стектрейс/пути сервера наружу
 app.use((err, _req, res, _next) => {

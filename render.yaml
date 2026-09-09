@@ -16,5 +16,9 @@ services:
         value: ./backend/data/sanawell.db
       - key: BOT_MODE
         value: polling
+      # Защитный сценарий выключен, пока текст/триггеры не утвердит гинеколог-соучредитель
+      # (см. CLAUDE.md). Менять на 'true' только после её review.
+      - key: SAFETY_PROTOCOL_ENABLED
+        value: 'false'
       - key: NODE_VERSION
         value: 24.20.0

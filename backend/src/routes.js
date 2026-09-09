@@ -22,7 +22,7 @@ function shapeCheckin(row) {
   };
 }
 
-function buildRouter({ requireAuth }) {
+function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   const router = express.Router();
 
   // Состояние пользователя при открытии Web App: выбран ли язык, пройден ли онбординг.
@@ -137,7 +137,16 @@ function buildRouter({ requireAuth }) {
   // Мягкая проверка свободного текста на маркеры риска.
   // Фронтенд вызывает это ПЕРЕД показом обычных протоколов, если где-то
   // в интерфейсе разрешён свободный ввод (например, необязательное поле "что беспокоит").
+  //
+  // За флагом SAFETY_PROTOCOL_ENABLED (CLAUDE.md, раздел "Защитный сценарий"): список
+  // триггеров и текст кризисного сообщения (safety.js) не утверждены гинекологом-соучредителем,
+  // поэтому пока флаг выключен — эндпоинт не анализирует текст и не запускает detectRiskTrigger
+  // вообще, только отвечает risk:false. Включать в проде только после её review.
   router.post('/safety-check', requireAuth, (req, res) => {
+    if (!safetyProtocolEnabled) {
+      return res.json({ risk: false });
+    }
+
     const { text } = req.body || {};
     const trigger = detectRiskTrigger(text);
 
