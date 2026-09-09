@@ -222,6 +222,25 @@ function getTodayCheckin(telegramId) {
   );
 }
 
+// "Мой путь" на /checkin/ (Срез А1, ТЗ 5.2/6.4 — минимальная версия без графика/подбора
+// техник, см. CLAUDE.md): история чек-инов за последние N дней, только из daily_checkins.
+// Старые chip-тег записи из logs сюда сознательно не подмешиваются (иная семантика данных,
+// подтверждено Надирой — см. раздел 5.2 ТЗ v2.9).
+function getCheckinHistory(telegramId, days = 14) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutoffDate = almatyDateString(cutoff);
+
+  return db
+    .prepare(
+      `SELECT checkin_date, sleep_score, mood_score, memory_score, comment
+       FROM daily_checkins
+       WHERE telegram_id = ? AND checkin_date >= ?
+       ORDER BY checkin_date ASC`
+    )
+    .all(String(telegramId), cutoffDate);
+}
+
 function insertSafetyEvent(telegramId, triggerType) {
   return db
     .prepare(`INSERT INTO safety_events (telegram_id, trigger_type) VALUES (?, ?)`)
@@ -259,6 +278,7 @@ module.exports = {
   getProgressGrid,
   upsertDailyCheckin,
   getTodayCheckin,
+  getCheckinHistory,
   insertSafetyEvent,
   getUsersDueForReminder,
   markReminderSent,

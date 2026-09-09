@@ -121,6 +121,23 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     res.json({ ok: true, checkin: shapeCheckin(db.getTodayCheckin(req.telegramId)) });
   });
 
+  // "Мой путь" на /checkin/ (Срез А1, ТЗ 5.2/6.4 — минимальная версия): история чек-инов
+  // за последние N дней, только из daily_checkins (не переиспользует /progress ниже —
+  // тот читает старую таблицу logs старого маршрута / и его пока трогать не нужно).
+  router.get('/checkin/history', requireAuth, (req, res) => {
+    const days = Math.min(Math.max(Number(req.query.days) || 14, 7), 30);
+    const rows = db.getCheckinHistory(req.telegramId, days);
+    res.json({
+      history: rows.map((row) => ({
+        date: row.checkin_date,
+        sleepScore: row.sleep_score,
+        moodScore: row.mood_score,
+        memoryScore: row.memory_score,
+        comment: row.comment,
+      })),
+    });
+  });
+
   // История последних отметок (сырые записи)
   router.get('/history', requireAuth, (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 30, 100);

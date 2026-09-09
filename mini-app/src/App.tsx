@@ -6,6 +6,7 @@ import { useBackButton } from './lib/useBackButton';
 import WelcomeScreen from './screens/WelcomeScreen';
 import HomeScreen from './screens/HomeScreen';
 import CheckinScreen from './screens/CheckinScreen';
+import ProgressScreen from './screens/ProgressScreen';
 
 function Screens() {
   const { screen, canGoBack, back } = useNavigation();
@@ -15,6 +16,8 @@ function Screens() {
   switch (screen) {
     case 'checkin':
       return <CheckinScreen />;
+    case 'progress':
+      return <ProgressScreen />;
     case 'home':
       return <HomeScreen />;
     case 'welcome':

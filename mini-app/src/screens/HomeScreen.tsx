@@ -60,6 +60,10 @@ export default function HomeScreen() {
           `Сервер узнал вас (initData подтверждена): язык — ${authStatus.me.language ?? 'не выбран'}.`}
         {authStatus.state === 'error' && `Не удалось подтвердить initData: ${authStatus.message}`}
       </p>
+
+      <button type="button" className="btn-secondary" onClick={() => push('progress')}>
+        Мой путь
+      </button>
     </main>
   );
 }

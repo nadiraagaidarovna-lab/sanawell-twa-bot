@@ -147,6 +147,38 @@ h1 {
   margin-top: 8px;
 }
 
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0 24px;
+}
+
+.history-row {
+  background: var(--secondary-bg);
+  border-radius: var(--card-radius);
+  padding: 12px 16px;
+}
+
+.history-date {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sw-terracotta);
+  margin-bottom: 4px;
+}
+
+.history-scores {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.history-comment {
+  font-size: 13px;
+  color: var(--hint);
+  margin: 6px 0 0;
+}
+
 .scales {
   display: flex;
   flex-direction: column;
