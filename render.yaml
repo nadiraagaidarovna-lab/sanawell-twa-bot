@@ -2,7 +2,16 @@ services:
   - type: web
     name: sanawell-twa-bot
     runtime: node
-    plan: free
+    # Срочный стопгеп (09.09.2026) — на free-плане у сервиса нет постоянного диска: файловая
+    # система эфемерна, и SQLite-файл (все пользователи, чек-ины, язык, согласия, напоминания)
+    # стирался на каждом деплое и на каждом выходе из сна free-инстанса. Starter — минимальный
+    # платный план, на котором Render вообще разрешает подключать disk. Миграция на Postgres —
+    # отдельный следующий срез, это временное, но обязательное решение прямо сейчас.
+    plan: starter
+    disk:
+      name: sanawell-data
+      mountPath: /var/data
+      sizeGB: 1
     # mini-app/dist не коммитится (собирается заново на каждом деплое) — поэтому buildCommand
     # ставит зависимости и собирает React-сборку внутри mini-app/ отдельным шагом.
     buildCommand: npm install && npm --prefix mini-app install && npm --prefix mini-app run build
@@ -12,8 +21,10 @@ services:
         sync: false
       - key: WEBAPP_URL
         sync: false
+      # Абсолютный путь внутри примонтированного постоянного диска (см. disk.mountPath выше) —
+      # не относительный, как было раньше, чтобы не зависеть от рабочей директории процесса.
       - key: DB_PATH
-        value: ./backend/data/sanawell.db
+        value: /var/data/sanawell.db
       - key: BOT_MODE
         value: polling
       # Защитный сценарий выключен, пока текст/триггеры не утвердит гинеколог-соучредитель
