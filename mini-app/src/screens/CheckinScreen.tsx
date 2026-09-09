@@ -116,7 +116,7 @@ export default function CheckinScreen() {
         <p className="eyebrow">SanaWell</p>
         <h1>Спасибо 🤍</h1>
         <p className="body-text">
-          Записала: сон {saved.sleepScore}, настроение {saved.moodScore}, память{' '}
+          Записала: сон {saved.sleepScore}, настроение {saved.moodScore}, голова{' '}
           {saved.memoryScore}
           {saved.comment ? ' — и то, что вы написали, тоже сохранила.' : '.'}
         </p>
@@ -143,8 +143,8 @@ export default function CheckinScreen() {
           onChange={setMood}
         />
         <ScaleSlider
-          label="Память"
-          hint="туман в голове, забывчивость"
+          label="Голова"
+          hint="туман, рассеянность"
           value={memory}
           onChange={setMemory}
         />
