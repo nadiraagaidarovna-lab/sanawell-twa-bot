@@ -157,7 +157,7 @@ export default function CheckinScreen() {
         id="checkin-comment"
         className="comment-input"
         rows={3}
-        placeholder="Можно надиктовать голосовым вводом клавиатуры телефона…"
+        placeholder="Если хочется — опишите словами, что происходит (необязательно)"
         value={comment}
         onChange={(e) => setComment(e.target.value)}
       />
