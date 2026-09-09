@@ -99,9 +99,9 @@ function startBot({
     if (query.data !== 'disable_reminder') return;
 
     const telegramId = String(query.from.id);
-    db.setReminderOptIn(telegramId, false);
+    await db.setReminderOptIn(telegramId, false);
 
-    const user = db.getUser(telegramId);
+    const user = await db.getUser(telegramId);
     const lang = user && user.language === 'kk' ? 'kk' : 'ru';
 
     try {
@@ -119,7 +119,7 @@ function startBot({
     if (currentAlmatyHour() !== reminderHour) return;
 
     const today = todayAlmaty();
-    const dueUsers = db.getUsersDueForReminder(today);
+    const dueUsers = await db.getUsersDueForReminder(today);
 
     for (const user of dueUsers) {
       const lang = user.language === 'kk' ? 'kk' : 'ru';
@@ -139,7 +139,7 @@ function startBot({
       }
       // marking sent regardless of delivery success avoids retry storms against a user
       // who has blocked the bot; a single missed evening is an acceptable trade-off in MVP.
-      db.markReminderSent(user.telegram_id, today);
+      await db.markReminderSent(user.telegram_id, today);
     }
   }
 
@@ -162,9 +162,17 @@ function startBot({
 
 if (require.main === module) {
   // Отдельный запуск: `npm run bot` — например, локально, если не хочется поднимать весь
-  // Express-сервер. На проде используйте `npm start` (server.js запускает бота сам).
-  const bot = startBot();
-  if (!bot) process.exit(1);
+  // Express-сервер. На проде используйте `npm start` (server.js запускает бота сам и сам
+  // дожидается initSchema — здесь дожидаемся её явно, раз server.js в этом пути не участвует).
+  db.initSchema()
+    .then(() => {
+      const bot = startBot();
+      if (!bot) process.exit(1);
+    })
+    .catch((e) => {
+      console.error('Не удалось инициализировать схему БД:', e);
+      process.exit(1);
+    });
 }
 
 module.exports = { startBot };

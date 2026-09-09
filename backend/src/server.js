@@ -4,6 +4,7 @@ const express = require('express');
 const { requireTelegramAuth } = require('./telegramAuth');
 const { buildRouter } = require('./routes');
 const { startBot } = require('./bot');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,12 +41,22 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'internal_error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`SanaWell TWA backend запущен на порту ${PORT}`);
-  if (!BOT_TOKEN) {
-    console.warn('BOT_TOKEN не задан — проверка initData всегда будет возвращать 401. Заполните .env');
-  }
-  // Бот и планировщик напоминаний живут в том же процессе, что и API — оба используют
-  // один и тот же SQLite-файл (см. README, раздел "Почему node:sqlite").
-  startBot();
-});
+// initSchema — асинхронная (Postgres/Neon, см. db.js), поэтому дожидаемся её ДО
+// app.listen: иначе первые запросы, пришедшие в узкое окно до готовности таблиц,
+// падали бы с ошибкой БД вместо того, чтобы просто чуть позже получить 200.
+db.initSchema()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`SanaWell TWA backend запущен на порту ${PORT}`);
+      if (!BOT_TOKEN) {
+        console.warn('BOT_TOKEN не задан — проверка initData всегда будет возвращать 401. Заполните .env');
+      }
+      // Бот и планировщик напоминаний живут в том же процессе, что и API — оба используют
+      // одну и ту же базу на Neon.
+      startBot();
+    });
+  })
+  .catch((e) => {
+    console.error('Не удалось инициализировать схему БД:', e);
+    process.exit(1);
+  });
