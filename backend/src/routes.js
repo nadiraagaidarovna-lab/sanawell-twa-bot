@@ -3,6 +3,7 @@ const express = require('express');
 const db = require('./db');
 const { getAllProtocols, getProtocolsForModule } = require('./protocols');
 const { detectRiskTrigger, getSafetyResources } = require('./safety');
+const { buildWeeklyReport } = require('./weeklyReport');
 
 // "Исправить" доступна в течение 24 часов после ПЕРВОЙ отправки чек-ина за день (ТЗ 6.3.4).
 // Т.к. чек-ин — одна запись в день, это на практике совпадает с "тот же Алматинский день"
@@ -176,6 +177,27 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
           comment: row.comment,
         })),
       });
+    })
+  );
+
+  // Полная версия еженедельного отчёта (Срез Е1, ТЗ 5.2/6.4): подбор техник по паттерну
+  // последних 7 дней daily_checkins + приглашение к врачу. Считается live при каждом
+  // открытии — без отдельного состояния "уже показывали на этой неделе" (подтверждено
+  // Надирой 10.09.2026). Сырые дневные данные для графика — отдельным вызовом
+  // /checkin/history выше, здесь только производная часть (рекомендации/приглашение),
+  // чтобы не дублировать одни и те же дневные значения в двух ответах.
+  router.get(
+    '/checkin/weekly-report',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const rows = await db.getCheckinHistory(req.telegramId, 7);
+      const history = rows.map((row) => ({
+        date: row.checkin_date,
+        sleepScore: row.sleep_score,
+        moodScore: row.mood_score,
+        memoryScore: row.memory_score,
+      }));
+      res.json(buildWeeklyReport(history));
     })
   );
 
