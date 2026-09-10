@@ -256,6 +256,44 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     })
   );
 
+  // Справочник партнёров (Срез П1, ТЗ 5.6/6.6/10.5): весь список сразу, фронтенд
+  // группирует по type/specialization. Без календаря/API — бронирование вручную по
+  // link_url вне приложения; is_placeholder=true, пока Надира не заведёт реальных
+  // партнёров напрямую в БД.
+  router.get(
+    '/partners',
+    requireAuth,
+    asyncHandler(async (_req, res) => {
+      const rows = await db.getPartners();
+      res.json({
+        partners: rows.map((row) => ({
+          id: row.id,
+          type: row.type,
+          specialization: row.specialization,
+          name: row.name,
+          formatDescription: row.format_description,
+          linkUrl: row.link_url,
+          linkType: row.link_type,
+          isPlaceholder: row.is_placeholder,
+        })),
+      });
+    })
+  );
+
+  // Факт перехода по ссылке партнёра — для метрик конверсии (10.5), не бронирования.
+  router.post(
+    '/partners/:id/click',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const partnerId = Number(req.params.id);
+      if (!Number.isInteger(partnerId)) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      await db.logPartnerClick(partnerId, req.telegramId);
+      res.json({ ok: true });
+    })
+  );
+
   return router;
 }
 

@@ -90,7 +90,58 @@ async function initSchema() {
       updated_at         TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'),
       UNIQUE (telegram_id, checkin_date)
     );
+
+    -- Справочник партнёров (ТЗ 5.6/6.6/10.5) — без интеграции календаря/API, только
+    -- карточка + внешняя ссылка. is_placeholder=true до того, как Надира заведёт реальных
+    -- партнёров (напрямую в БД, без релиза кода — по замыслу раздела 10.5).
+    CREATE TABLE IF NOT EXISTS partners (
+      id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      type                TEXT NOT NULL CHECK (type IN ('doctor','lab')),
+      specialization      TEXT CHECK (specialization IN ('gynecologist','nutritionist','endocrinologist') OR specialization IS NULL),
+      name                TEXT NOT NULL,
+      format_description  TEXT,
+      link_url            TEXT NOT NULL,
+      link_type           TEXT NOT NULL CHECK (link_type IN ('website','whatsapp')),
+      is_placeholder      BOOLEAN NOT NULL DEFAULT false,
+      sort_order          INTEGER NOT NULL DEFAULT 0,
+      created_at          TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+    );
+
+    -- Клик по ссылке партнёра — для метрик конверсии (раздел 10.5/14), не факт бронирования.
+    CREATE TABLE IF NOT EXISTS partner_clicks (
+      id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      partner_id   BIGINT NOT NULL REFERENCES partners(id),
+      telegram_id  TEXT NOT NULL,
+      created_at   TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+    );
   `);
+
+  await seedPlaceholderPartners();
+}
+
+// Плейсхолдеры (подтверждено Надирой 10.09.2026) — только если таблица ещё пуста, чтобы
+// не плодить дубликаты при каждом деплое/рестарте и не мешать реальным данным, если их
+// уже завели вручную. Ссылки — на example.com, сознательно нерабочие: не выдумываем
+// телефон/WhatsApp, который может принадлежать реальному человеку.
+async function seedPlaceholderPartners() {
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS count FROM partners');
+  if (rows[0].count > 0) return;
+
+  const placeholders = [
+    ['doctor', 'gynecologist', 'Гинеколог — партнёр (плейсхолдер)', 'Очно, Алматы', 'https://example.com/partner-placeholder-1', 'website'],
+    ['doctor', 'nutritionist', 'Нутрициолог — партнёр (плейсхолдер)', 'Онлайн-консультация', 'https://example.com/partner-placeholder-2', 'whatsapp'],
+    ['doctor', 'endocrinologist', 'Эндокринолог — партнёр (плейсхолдер)', 'Очно, Алматы', 'https://example.com/partner-placeholder-3', 'website'],
+    ['lab', null, 'Лаборатория — партнёр (плейсхолдер)', 'Забор анализов на дому и в филиалах', 'https://example.com/partner-placeholder-4', 'website'],
+  ];
+
+  for (let i = 0; i < placeholders.length; i += 1) {
+    const [type, specialization, name, formatDescription, linkUrl, linkType] = placeholders[i];
+    await pool.query(
+      `INSERT INTO partners (type, specialization, name, format_description, link_url, link_type, is_placeholder, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, true, $7)`,
+      [type, specialization, name, formatDescription, linkUrl, linkType, i]
+    );
+  }
 }
 
 async function getUser(telegramId) {
@@ -270,6 +321,27 @@ async function markReminderSent(telegramId, todayAlmaty) {
   ]);
 }
 
+// Справочник партнёров (ТЗ 5.6/6.6/10.5) — весь список сразу, без пагинации: масштаб
+// на MVP (единицы-десятки партнёров) не оправдывает её сложность. Фронтенд группирует
+// по type/specialization сам, здесь просто фиксированный порядок показа.
+async function getPartners() {
+  const { rows } = await pool.query(
+    `SELECT id, type, specialization, name, format_description, link_url, link_type, is_placeholder
+     FROM partners
+     ORDER BY sort_order ASC, id ASC`
+  );
+  return rows;
+}
+
+// Факт перехода по ссылке партнёра — для метрик конверсии (10.5/14), не бронирования:
+// бэкенд не знает и не может знать, состоялась ли запись, она происходит вне приложения.
+async function logPartnerClick(partnerId, telegramId) {
+  await pool.query('INSERT INTO partner_clicks (partner_id, telegram_id) VALUES ($1, $2)', [
+    partnerId,
+    String(telegramId),
+  ]);
+}
+
 module.exports = {
   initSchema,
   getUser,
@@ -287,6 +359,8 @@ module.exports = {
   insertSafetyEvent,
   getUsersDueForReminder,
   markReminderSent,
+  getPartners,
+  logPartnerClick,
   almatyDateString,
   SUPPORTED_LANGUAGES,
 };
