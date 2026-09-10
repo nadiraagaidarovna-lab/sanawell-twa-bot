@@ -24,6 +24,12 @@ const TEXT = {
     reminder: 'Как прошёл день? Если хочется — загляните и отметьте, как вы 🤍',
     disable: 'Отключить',
     disabled: 'Хорошо, больше не будем писать. Бот всегда открыт, когда захотите вернуться сами.',
+    // Срез Ж — отдельное, независимое от ежедневного чек-ин-напоминания сообщение,
+    // сознательно на "ты" (не "вы", как у остального бота): точечное решение по этому
+    // конкретному тексту, подтверждено Надирой 10.09.2026, не меняет тон остального бота.
+    habitsReminder: 'Пара минут на себя: загляни в новую технику питания или силовых нагрузок 🤍',
+    habitsDisabled:
+      'Хорошо, больше не будем писать про питание и силовые. Библиотека техник всегда открыта — загляни, когда сама захочешь.',
   },
   kk: {
     welcome: [
@@ -39,6 +45,12 @@ const TEXT = {
     reminder: 'Күніңіз қалай өтті? Қаласаңыз, кіріп, қалай екеніңізді белгілеңіз 🤍',
     disable: 'Өшіру',
     disabled: 'Жақсы, енді жазбаймыз. Бот сіз өзіңіз қайта оралғыңыз келгенде әрқашан ашық.',
+    // Срез Ж — черновик, как и весь казахский контент (требует проверки носителем языка
+    // перед публикацией, см. CLAUDE.md); "сен"-форма зеркалит осознанный переход на "ты"
+    // в русском тексте выше, а не расхождение с формальным "сіз" остального бота.
+    habitsReminder: 'Өзіңе бірнеше минут бөл: тамақтану немесе күш жаттығулары бойынша жаңа тәсілге көз жүгірт 🤍',
+    habitsDisabled:
+      'Жарайды, тамақтану мен күш жаттығулары туралы енді жазбаймыз. Тәсілдер кітапханасы өзің қайта оралғың келгенде әрқашан ашық.',
   },
 };
 
@@ -61,6 +73,12 @@ function startBot({
   webAppUrl = process.env.WEBAPP_URL,
   botMode = process.env.BOT_MODE || 'polling',
   reminderHour = Number(process.env.REMINDER_HOUR || 19),
+  // Срез Ж: другой час, чтобы не приходить в один момент с ежедневным напоминанием о
+  // чек-ине выше (19:00) — полдень, тематически ближе к "питанию", чем поздний вечер.
+  habitsReminderHour = Number(process.env.HABITS_REMINDER_HOUR || 12),
+  // "Через день" (вариант 2 из предложенных, осознанно не максимальная частота варианта 3 —
+  // сначала смотрим на реальные данные, подтверждено Надирой 10.09.2026).
+  habitsReminderIntervalDays = Number(process.env.HABITS_REMINDER_INTERVAL_DAYS || 2),
   reminderCheckIntervalMs = 5 * 60 * 1000,
 } = {}) {
   if (!botToken) {
@@ -95,18 +113,30 @@ function startBot({
 
   // Кнопка "Отключить" прямо в сообщении с напоминанием — работает в один клик,
   // без дополнительных вопросов и без повторных предложений включить обратно (ТЗ 4.3, раздел 2).
+  // Срез Ж добавил второй, независимый канал напоминаний (питание/силовые) со своей кнопкой
+  // отключения — оба callback_data обрабатываются здесь одним обработчиком, чтобы отключение
+  // одного канала не задевало другой (setReminderOptIn vs setHabitsReminderOptIn ниже).
+  const DISABLE_HANDLERS = {
+    disable_reminder: { setOptIn: (id) => db.setReminderOptIn(id, false), disabledTextKey: 'disabled' },
+    disable_habits_reminder: {
+      setOptIn: (id) => db.setHabitsReminderOptIn(id, false),
+      disabledTextKey: 'habitsDisabled',
+    },
+  };
+
   bot.on('callback_query', async (query) => {
-    if (query.data !== 'disable_reminder') return;
+    const handler = DISABLE_HANDLERS[query.data];
+    if (!handler) return;
 
     const telegramId = String(query.from.id);
-    await db.setReminderOptIn(telegramId, false);
+    await handler.setOptIn(telegramId);
 
     const user = await db.getUser(telegramId);
     const lang = user && user.language === 'kk' ? 'kk' : 'ru';
 
     try {
       await bot.answerCallbackQuery(query.id);
-      await bot.editMessageText(TEXT[lang].disabled, {
+      await bot.editMessageText(TEXT[lang][handler.disabledTextKey], {
         chat_id: query.message.chat.id,
         message_id: query.message.message_id,
       });
@@ -143,8 +173,38 @@ function startBot({
     }
   }
 
+  // Срез Ж: та же механика, что sendDailyReminders выше (throttle + "Отключить" в один клик),
+  // но отдельный час (habitsReminderHour) и интервал в днях, не "раз в день" — намеренно
+  // независимый канал, отключение одного не трогает другой (см. DISABLE_HANDLERS выше).
+  async function sendHabitsReminders() {
+    if (currentAlmatyHour() !== habitsReminderHour) return;
+
+    const today = todayAlmaty();
+    const dueUsers = await db.getUsersDueForHabitsReminder(habitsReminderIntervalDays);
+
+    for (const user of dueUsers) {
+      const lang = user.language === 'kk' ? 'kk' : 'ru';
+      try {
+        await bot.sendMessage(user.telegram_id, TEXT[lang].habitsReminder, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: TEXT[lang].open, web_app: { url: checkinUrl } },
+                { text: TEXT[lang].disable, callback_data: 'disable_habits_reminder' },
+              ],
+            ],
+          },
+        });
+      } catch (e) {
+        console.warn(`Не удалось отправить напоминание про питание/силовые ${user.telegram_id}:`, e.message);
+      }
+      await db.markHabitsReminderSent(user.telegram_id, today);
+    }
+  }
+
   const timer = setInterval(() => {
     sendDailyReminders().catch((e) => console.error('Ошибка планировщика напоминаний:', e));
+    sendHabitsReminders().catch((e) => console.error('Ошибка планировщика напоминаний про питание/силовые:', e));
   }, reminderCheckIntervalMs);
   // На платформах, где хочется дать процессу завершиться самостоятельно (не Render/prod),
   // таймер не должен держать event loop живым сам по себе.
@@ -152,7 +212,7 @@ function startBot({
 
   console.log(
     `Бот запущен в режиме "${botMode}". Web App URL: ${webAppUrl}. ` +
-      `Напоминания: ~${reminderHour}:00 по Алматы, проверка каждые ${
+      `Напоминания: ~${reminderHour}:00 по Алматы (чек-ин), ~${habitsReminderHour}:00 раз в ${habitsReminderIntervalDays} дн. (питание/силовые), проверка каждые ${
         reminderCheckIntervalMs / 60000
       } мин.`
   );

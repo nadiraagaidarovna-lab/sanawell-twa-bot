@@ -54,6 +54,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         onboarded,
         language: user ? user.language : null,
         reminderOptIn: !!(user && user.reminder_opt_in),
+        habitsReminderOptIn: !!(user && user.habits_reminder_opt_in),
         menopausePath: user ? user.menopause_path : null,
         medicalDisclaimerConsented: !!(user && user.medical_disclaimer_consent_at),
         dataStorageConsented: !!(user && user.data_storage_consent_at),
@@ -124,6 +125,19 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     asyncHandler(async (req, res) => {
       const { optIn } = req.body || {};
       await db.setReminderOptIn(req.telegramId, !!optIn);
+      res.json({ ok: true });
+    })
+  );
+
+  // Срез Ж: напоминание про технику питания/силовых нагрузок из библиотеки — независимый
+  // opt-in от reminder-opt-in выше, тот же паттерн (приложение или кнопка "Отключить"
+  // в самом сообщении бота, см. bot.js).
+  router.post(
+    '/habits-reminder-opt-in',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { optIn } = req.body || {};
+      await db.setHabitsReminderOptIn(req.telegramId, !!optIn);
       res.json({ ok: true });
     })
   );

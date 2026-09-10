@@ -50,6 +50,12 @@ async function initSchema() {
       menopause_path                 TEXT CHECK (menopause_path IN ('natural', 'surgical', 'oncological') OR menopause_path IS NULL),
       reminder_opt_in                INTEGER NOT NULL DEFAULT 0,
       last_reminder_sent_date        TEXT,
+      -- Срез Ж: отдельный, независимый opt-in для напоминания про технику питания/силовых
+      -- нагрузок из библиотеки (раздел 5.4) — сознательно НЕ то же поле, что reminder_opt_in
+      -- выше (ежедневное напоминание про чек-ин): отключение одного не должно тихо отключать
+      -- другое, у каждого своя кнопка "Отключить" в чате (см. bot.js).
+      habits_reminder_opt_in         INTEGER NOT NULL DEFAULT 0,
+      last_habits_reminder_sent_date TEXT,
       created_at                     TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'),
       last_seen_at                   TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
     );
@@ -62,6 +68,8 @@ async function initSchema() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS data_storage_consent_at TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS menopause_path TEXT
       CHECK (menopause_path IN ('natural', 'surgical', 'oncological') OR menopause_path IS NULL);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS habits_reminder_opt_in INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS last_habits_reminder_sent_date TEXT;
 
     -- Один лог = одна отметка по одному из трёх модулей старого трекера (module: 'sleep'
     -- | 'mood' | 'cognitive'). Осиротела после Среза В (маршрут / упразднён); роуты и
@@ -218,6 +226,14 @@ async function setReminderOptIn(telegramId, optIn) {
   ]);
 }
 
+async function setHabitsReminderOptIn(telegramId, optIn) {
+  await touchOrCreateUser(telegramId);
+  await pool.query('UPDATE users SET habits_reminder_opt_in = $1 WHERE telegram_id = $2', [
+    optIn ? 1 : 0,
+    String(telegramId),
+  ]);
+}
+
 // Одна запись в день на пользователя — повторная отправка в тот же Алматинский день
 // обновляет ту же строку и помечает её corrected_manually (основа для "Исправить",
 // ТЗ 6.3.4) — естественное следствие upsert по (telegram_id, checkin_date).
@@ -295,6 +311,31 @@ async function markReminderSent(telegramId, todayAlmaty) {
   ]);
 }
 
+// Срез Ж: напоминание про технику питания/силовых нагрузок — раз в intervalDays дней
+// (не каждый день, как getUsersDueForReminder выше), поэтому throttle не "!= сегодня",
+// а "дата последней отправки достаточно старая". Cutoff считается в JS (та же схема, что
+// и getCheckinHistory), не в SQL — избегаем смешивания часовых поясов между Node и Postgres.
+async function getUsersDueForHabitsReminder(intervalDays) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - intervalDays);
+  const cutoffDate = almatyDateString(cutoff);
+
+  const { rows } = await pool.query(
+    `SELECT telegram_id, language FROM users
+     WHERE habits_reminder_opt_in = 1
+       AND (last_habits_reminder_sent_date IS NULL OR last_habits_reminder_sent_date <= $1)`,
+    [cutoffDate]
+  );
+  return rows;
+}
+
+async function markHabitsReminderSent(telegramId, todayAlmaty) {
+  await pool.query('UPDATE users SET last_habits_reminder_sent_date = $1 WHERE telegram_id = $2', [
+    todayAlmaty,
+    String(telegramId),
+  ]);
+}
+
 // Справочник партнёров (ТЗ 5.6/6.6/10.5) — весь список сразу, без пагинации: масштаб
 // на MVP (единицы-десятки партнёров) не оправдывает её сложность. Фронтенд группирует
 // по type/specialization сам, здесь просто фиксированный порядок показа.
@@ -324,6 +365,7 @@ module.exports = {
   setMedicalDisclaimerConsent,
   setDataStorageConsent,
   setReminderOptIn,
+  setHabitsReminderOptIn,
   touchOrCreateUser,
   upsertDailyCheckin,
   getTodayCheckin,
@@ -331,6 +373,8 @@ module.exports = {
   insertSafetyEvent,
   getUsersDueForReminder,
   markReminderSent,
+  getUsersDueForHabitsReminder,
+  markHabitsReminderSent,
   getPartners,
   logPartnerClick,
   almatyDateString,

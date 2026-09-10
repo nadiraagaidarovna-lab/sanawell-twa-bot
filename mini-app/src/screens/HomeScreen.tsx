@@ -13,6 +13,7 @@ interface MeResponse {
   onboarded: boolean;
   language: string | null;
   reminderOptIn: boolean;
+  habitsReminderOptIn: boolean;
 }
 
 type AuthStatus =
@@ -35,6 +36,9 @@ export default function HomeScreen() {
   // сделан, этот блок стоит убрать или заменить.
   const [lang, setLang] = useState<Lang | null>(null);
   const [reminderOptIn, setReminderOptIn] = useState(false);
+  // Срез Ж — независимый opt-in от reminderOptIn выше (напоминание про технику питания/
+  // силовых нагрузок из библиотеки, а не про ежедневный чек-ин), тот же UI-паттерн.
+  const [habitsReminderOptIn, setHabitsReminderOptIn] = useState(false);
 
   useMainButton({
     text: 'Начать чек-ин',
@@ -50,6 +54,7 @@ export default function HomeScreen() {
         setAuthStatus({ state: 'ok', me });
         setLang(me.language === 'kk' ? 'kk' : 'ru');
         setReminderOptIn(me.reminderOptIn);
+        setHabitsReminderOptIn(me.habitsReminderOptIn);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -80,6 +85,16 @@ export default function HomeScreen() {
         // аналогично — не блокируем UI
       }
     );
+  };
+
+  const handleHabitsReminderToggle = (checked: boolean) => {
+    setHabitsReminderOptIn(checked);
+    apiFetch('/habits-reminder-opt-in', {
+      method: 'POST',
+      body: JSON.stringify({ optIn: checked }),
+    }).catch(() => {
+      // аналогично — не блокируем UI
+    });
   };
 
   return (
@@ -132,6 +147,15 @@ export default function HomeScreen() {
               onChange={(e) => handleReminderToggle(e.target.checked)}
             />
             <span>Напоминание вечером</span>
+          </label>
+
+          <label className="reminder-toggle-row">
+            <input
+              type="checkbox"
+              checked={habitsReminderOptIn}
+              onChange={(e) => handleHabitsReminderToggle(e.target.checked)}
+            />
+            <span>Напоминание про питание и силовые</span>
           </label>
         </div>
       )}
