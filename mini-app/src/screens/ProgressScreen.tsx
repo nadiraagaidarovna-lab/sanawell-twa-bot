@@ -5,6 +5,7 @@
 // см. Срез Е1, — намеренно не дублирует дневные оценки, которые уже есть в history).
 import { useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
+import { useNavigation } from '../lib/useNavigation';
 import WeeklyChart, { type WeeklyChartEntry } from '../components/WeeklyChart';
 
 interface HistoryEntry {
@@ -47,6 +48,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function ProgressScreen() {
+  const { push } = useNavigation();
   const [view, setView] = useState<ViewState>('loading');
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +141,12 @@ export default function ProgressScreen() {
           )}
 
           {reportState === 'loaded' && report?.doctorNudge.show && (
-            <div className="doctor-nudge">{report.doctorNudge.text}</div>
+            <div className="doctor-nudge">
+              <p style={{ margin: '0 0 10px' }}>{report.doctorNudge.text}</p>
+              <button type="button" className="btn-secondary" onClick={() => push('partners')}>
+                Запись к врачу
+              </button>
+            </div>
           )}
 
           <p className="module-heading">Все записи за 14 дней</p>
