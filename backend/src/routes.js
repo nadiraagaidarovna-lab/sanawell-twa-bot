@@ -33,23 +33,36 @@ function asyncHandler(fn) {
 function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   const router = express.Router();
 
-  // Состояние пользователя при открытии Web App: выбран ли язык, пройден ли онбординг.
-  // Позволяет фронтенду пропустить экран выбора языка и/или согласия для вернувшегося
-  // пользователя (ТЗ, Модуль 4.1 и 5.1).
+  // Состояние пользователя при открытии Web App: выбран ли путь менопаузы, даны ли оба
+  // обязательных согласия (раздел 13 ТЗ), пройден ли онбординг целиком. onboarded требует
+  // путь + оба обязательных согласия (Срез О1) — язык и пуш-опт-ин НЕ входят в это условие:
+  // язык можно менять в любой момент (не одноразовый гейт), пуш-напоминания опциональны
+  // по определению (раздел 6.5, по умолчанию выключены). Фактическая проверка onboarded на
+  // фронтенде (пропуск экранов онбординга для вернувшихся) — отдельный срез О6, ещё не сделан.
   router.get(
     '/me',
     requireAuth,
     asyncHandler(async (req, res) => {
       const user = await db.getUser(req.telegramId);
+      const onboarded = !!(
+        user &&
+        user.menopause_path &&
+        user.medical_disclaimer_consent_at &&
+        user.data_storage_consent_at
+      );
       res.json({
-        onboarded: !!(user && user.consent_at),
+        onboarded,
         language: user ? user.language : null,
         reminderOptIn: !!(user && user.reminder_opt_in),
+        menopausePath: user ? user.menopause_path : null,
+        medicalDisclaimerConsented: !!(user && user.medical_disclaimer_consent_at),
+        dataStorageConsented: !!(user && user.data_storage_consent_at),
       });
     })
   );
 
-  // Выбор языка (можно вызывать и до согласия — экран языка идёт первым, ТЗ 5.1).
+  // Выбор языка (можно вызывать и до согласий — экран языка идёт до них, ТЗ 6.2 шаг 3;
+  // также остаётся доступным в любой момент после онбординга, см. HomeScreen.tsx).
   router.post(
     '/language',
     requireAuth,
@@ -63,14 +76,42 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     })
   );
 
-  // Подтверждение согласия при первом входе (экран "Разрешаем входить").
-  // reminderOptIn — необязательный чекбокс "присылать напоминание", по умолчанию false.
+  // Вопрос о пути менопаузы (ТЗ 6.2 шаг 2, раздел 3.1) — определяет образовательный трек
+  // и маршрутизацию на весь дальнейший опыт (5.3.1 и далее, ещё не построены).
   router.post(
-    '/consent',
+    '/menopause-path',
     requireAuth,
     asyncHandler(async (req, res) => {
-      const { reminderOptIn } = req.body || {};
-      await db.upsertUserConsent(req.telegramId, !!reminderOptIn);
+      const { path } = req.body || {};
+      if (!db.MENOPAUSE_PATHS.includes(path)) {
+        return res.status(400).json({ error: 'invalid_menopause_path' });
+      }
+      await db.setMenopausePath(req.telegramId, path);
+      res.json({ ok: true });
+    })
+  );
+
+  // Немедицинский дисклеймер и раскрытие хранения данных — 2 из 3 согласий раздела 13,
+  // каждое своим эндпоинтом и своим полем в БД, чтобы отзыв одного не затрагивал другие
+  // (третье согласие, пуш-уведомления, уже отдельный /reminder-opt-in ниже). consented:false
+  // пока не вызывается ниоткуда во фронтенде — экран отзыва согласий из "Настроек" ещё не
+  // построен (отдельный будущий срез, см. CLAUDE.md), но эндпоинт уже поддерживает эту ветку.
+  router.post(
+    '/consent/medical-disclaimer',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { consented } = req.body || {};
+      await db.setMedicalDisclaimerConsent(req.telegramId, !!consented);
+      res.json({ ok: true });
+    })
+  );
+
+  router.post(
+    '/consent/data-storage',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { consented } = req.body || {};
+      await db.setDataStorageConsent(req.telegramId, !!consented);
       res.json({ ok: true });
     })
   );

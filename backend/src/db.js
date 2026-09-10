@@ -37,14 +37,31 @@ function almatyDateString(date) {
 async function initSchema() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
-      telegram_id             TEXT PRIMARY KEY,
-      language                TEXT,
-      consent_at              TEXT,
-      reminder_opt_in         INTEGER NOT NULL DEFAULT 0,
-      last_reminder_sent_date TEXT,
-      created_at              TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'),
-      last_seen_at            TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
+      telegram_id                    TEXT PRIMARY KEY,
+      language                       TEXT,
+      -- Осиротело Срезом О1 (постоянный онбординг, раздел 13 ТЗ): раньше один общий
+      -- consent_at на все согласия сразу, теперь — 2 отдельных поля ниже, каждое можно
+      -- отозвать по отдельности (раздел 13 явно этого требует). Колонка и уже накопленные
+      -- в ней данные оставлены как есть, тот же подход, что и у logs/safety_events —
+      -- удаление старых данных БД отдельное решение, не часть этого среза.
+      consent_at                     TEXT,
+      medical_disclaimer_consent_at  TEXT,
+      data_storage_consent_at        TEXT,
+      menopause_path                 TEXT CHECK (menopause_path IN ('natural', 'surgical', 'oncological') OR menopause_path IS NULL),
+      reminder_opt_in                INTEGER NOT NULL DEFAULT 0,
+      last_reminder_sent_date        TEXT,
+      created_at                     TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'),
+      last_seen_at                   TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
     );
+
+    -- CREATE TABLE IF NOT EXISTS выше не трогает уже существующую на проде таблицу users
+    -- (создана до Среза О1) — новые колонки нужно добавить явной миграцией, иначе локальная
+    -- свежая БД и прод разойдутся по схеме. IF NOT EXISTS делает миграцию идемпотентной
+    -- при повторных деплоях/рестартах.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS medical_disclaimer_consent_at TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS data_storage_consent_at TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS menopause_path TEXT
+      CHECK (menopause_path IN ('natural', 'surgical', 'oncological') OR menopause_path IS NULL);
 
     -- Один лог = одна отметка по одному из трёх модулей старого трекера (module: 'sleep'
     -- | 'mood' | 'cognitive'). Осиротела после Среза В (маршрут / упразднён); роуты и
@@ -160,14 +177,37 @@ async function setUserLanguage(telegramId, language) {
   await pool.query('UPDATE users SET language = $1 WHERE telegram_id = $2', [language, String(telegramId)]);
 }
 
-// reminderOptIn — пользователь сам решает на экране согласия (чекбокс, по умолчанию выключен).
-async function upsertUserConsent(telegramId, reminderOptIn) {
-  const now = new Date().toISOString();
+const MENOPAUSE_PATHS = ['natural', 'surgical', 'oncological'];
+
+async function setMenopausePath(telegramId, path) {
+  if (!MENOPAUSE_PATHS.includes(path)) return;
   await touchOrCreateUser(telegramId);
-  await pool.query(
-    'UPDATE users SET consent_at = $1, last_seen_at = $2, reminder_opt_in = $3 WHERE telegram_id = $4',
-    [now, now, reminderOptIn ? 1 : 0, String(telegramId)]
-  );
+  await pool.query('UPDATE users SET menopause_path = $1 WHERE telegram_id = $2', [
+    path,
+    String(telegramId),
+  ]);
+}
+
+// Каждое согласие — отдельное поле, отзываемое по отдельности (раздел 13 ТЗ), а не один
+// общий флаг на всё сразу (тот был у старого upsertUserConsent, убран Срезом О1). consented
+// true -> проставляем текущую отметку времени; false (для будущего экрана отзыва, ещё не
+// построен) -> возвращаем NULL, то есть "согласие не дано/отозвано".
+async function setMedicalDisclaimerConsent(telegramId, consented) {
+  await touchOrCreateUser(telegramId);
+  const value = consented ? new Date().toISOString() : null;
+  await pool.query('UPDATE users SET medical_disclaimer_consent_at = $1 WHERE telegram_id = $2', [
+    value,
+    String(telegramId),
+  ]);
+}
+
+async function setDataStorageConsent(telegramId, consented) {
+  await touchOrCreateUser(telegramId);
+  const value = consented ? new Date().toISOString() : null;
+  await pool.query('UPDATE users SET data_storage_consent_at = $1 WHERE telegram_id = $2', [
+    value,
+    String(telegramId),
+  ]);
 }
 
 async function setReminderOptIn(telegramId, optIn) {
@@ -280,7 +320,9 @@ module.exports = {
   initSchema,
   getUser,
   setUserLanguage,
-  upsertUserConsent,
+  setMenopausePath,
+  setMedicalDisclaimerConsent,
+  setDataStorageConsent,
   setReminderOptIn,
   touchOrCreateUser,
   upsertDailyCheckin,
@@ -293,4 +335,5 @@ module.exports = {
   logPartnerClick,
   almatyDateString,
   SUPPORTED_LANGUAGES,
+  MENOPAUSE_PATHS,
 };
