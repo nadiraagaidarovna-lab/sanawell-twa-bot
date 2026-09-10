@@ -8,6 +8,7 @@ import HomeScreen from './screens/HomeScreen';
 import CheckinScreen from './screens/CheckinScreen';
 import ProgressScreen from './screens/ProgressScreen';
 import TechniquesScreen from './screens/TechniquesScreen';
+import PartnersScreen from './screens/PartnersScreen';
 
 function Screens() {
   const { screen, canGoBack, back } = useNavigation();
@@ -21,6 +22,8 @@ function Screens() {
       return <ProgressScreen />;
     case 'techniques':
       return <TechniquesScreen />;
+    case 'partners':
+      return <PartnersScreen />;
     case 'home':
       return <HomeScreen />;
     case 'welcome':

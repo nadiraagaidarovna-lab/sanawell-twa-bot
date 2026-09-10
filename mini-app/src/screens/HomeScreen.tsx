@@ -101,6 +101,9 @@ export default function HomeScreen() {
       <button type="button" className="btn-secondary" onClick={() => push('techniques')}>
         Все техники самопомощи
       </button>
+      <button type="button" className="btn-secondary" onClick={() => push('partners')}>
+        Запись к врачу
+      </button>
 
       {authStatus.state === 'ok' && lang && (
         <div className="settings-section">
