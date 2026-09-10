@@ -1,7 +1,7 @@
 // routes.js — API для Web App. Все роуты требуют валидную initData (см. telegramAuth.js).
 const express = require('express');
 const db = require('./db');
-const { getAllProtocols, getProtocolsForModule } = require('./protocols');
+const { getAllProtocols } = require('./protocols');
 const { detectRiskTrigger, getSafetyResources } = require('./safety');
 const { buildWeeklyReport } = require('./weeklyReport');
 
@@ -87,31 +87,9 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     })
   );
 
-  // Запись одной отметки трекера: { module: 'sleep'|'mood'|'cognitive', value: 'anxious' }
-  router.post(
-    '/track',
-    requireAuth,
-    asyncHandler(async (req, res) => {
-      const { module: moduleName, value } = req.body || {};
-      const allowedModules = ['sleep', 'mood', 'cognitive'];
-
-      if (!allowedModules.includes(moduleName) || !value || typeof value !== 'string') {
-        return res.status(400).json({ error: 'invalid_payload' });
-      }
-
-      await db.touchUser(req.telegramId);
-      await db.insertLog(req.telegramId, moduleName, value.slice(0, 64));
-
-      res.json({
-        ok: true,
-        protocols: getProtocolsForModule(moduleName),
-      });
-    })
-  );
-
-  // Ежедневный чек-ин Mini App (ТЗ-v2.1.md, разделы 5.1/6.3/11) — отдельная сущность от
-  // /track выше (старый 3-кнопочный трекер): одна запись в день, числовая шкала 1-10.
-  // Без LLM-обработки (извлечение тем, safety_flag) — это явно Этап 2 по разделу 16 ТЗ,
+  // Ежедневный чек-ин Mini App (ТЗ-v2.1.md, разделы 5.1/6.3/11): одна запись в день,
+  // числовая шкала 1-10. Без LLM-обработки (извлечение тем, safety_flag) — это явно
+  // Этап 2 по разделу 16 ТЗ,
   // здесь safety_flag остаётся false-заглушкой из схемы БД.
 
   // Чек-ин за сегодня, если уже отправлен — экран использует это при загрузке, чтобы
@@ -160,8 +138,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   );
 
   // "Мой путь" на /checkin/ (Срез А1, ТЗ 5.2/6.4 — минимальная версия): история чек-инов
-  // за последние N дней, только из daily_checkins (не переиспользует /progress ниже —
-  // тот читает старую таблицу logs старого маршрута / и его пока трогать не нужно).
+  // за последние N дней, только из daily_checkins.
   router.get(
     '/checkin/history',
     requireAuth,
@@ -198,28 +175,6 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         memoryScore: row.memory_score,
       }));
       res.json(buildWeeklyReport(history));
-    })
-  );
-
-  // История последних отметок (сырые записи)
-  router.get(
-    '/history',
-    requireAuth,
-    asyncHandler(async (req, res) => {
-      const limit = Math.min(Number(req.query.limit) || 30, 100);
-      const logs = await db.getRecentLogs(req.telegramId, limit);
-      res.json({ logs });
-    })
-  );
-
-  // Экран "Мой путь": сетка по дням за последние 7-14 дней на три модуля (ТЗ 4.2).
-  router.get(
-    '/progress',
-    requireAuth,
-    asyncHandler(async (req, res) => {
-      const days = Math.min(Math.max(Number(req.query.days) || 14, 7), 30);
-      const grid = await db.getProgressGrid(req.telegramId, days);
-      res.json(grid);
     })
   );
 

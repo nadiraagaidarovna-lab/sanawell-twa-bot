@@ -25,12 +25,6 @@ function nowUtcString() {
   return new Date().toISOString().slice(0, 19).replace('T', ' ');
 }
 
-function utcDaysAgoString(days) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 19).replace('T', ' ');
-}
-
 // Локальная (Алматы) дата в формате YYYY-MM-DD — сутки пользователя, а не UTC.
 function almatyDateString(date) {
   return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Almaty' });
@@ -53,9 +47,10 @@ async function initSchema() {
     );
 
     -- Один лог = одна отметка по одному из трёх модулей старого трекера (module: 'sleep'
-    -- | 'mood' | 'cognitive'). Осиротела после Среза В (маршрут / упразднён) — переносим
-    -- 1:1 как есть, уборка осиротевших таблиц/роутов — отдельная задача (подтверждено
-    -- Надирой).
+    -- | 'mood' | 'cognitive'). Осиротела после Среза В (маршрут / упразднён); роуты и
+    -- функции, писавшие/читавшие её (/api/track, /api/progress, /api/history), удалены
+    -- в Срезе У1 — сама таблица и уже накопленные в ней данные оставлены как есть,
+    -- удаление данных БД — отдельное решение, не часть уборки кода (подтверждено Надирой).
     CREATE TABLE IF NOT EXISTS logs (
       id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
       telegram_id  TEXT NOT NULL REFERENCES users(telegram_id),
@@ -183,67 +178,6 @@ async function setReminderOptIn(telegramId, optIn) {
   ]);
 }
 
-async function touchUser(telegramId) {
-  await pool.query(
-    `UPDATE users SET last_seen_at = to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS') WHERE telegram_id = $1`,
-    [String(telegramId)]
-  );
-}
-
-async function insertLog(telegramId, moduleName, value) {
-  await pool.query('INSERT INTO logs (telegram_id, module, value) VALUES ($1, $2, $3)', [
-    String(telegramId),
-    moduleName,
-    value,
-  ]);
-}
-
-async function getRecentLogs(telegramId, limit = 30) {
-  const { rows } = await pool.query(
-    `SELECT module, value, created_at FROM logs
-     WHERE telegram_id = $1 ORDER BY created_at DESC LIMIT $2`,
-    [String(telegramId), limit]
-  );
-  return rows;
-}
-
-// Экран "Мой путь" старого маршрута / (осиротел, см. комментарий у таблицы logs выше):
-// сетка "отмечался ли модуль в этот день" за последние N дней.
-async function getProgressGrid(telegramId, days = 14) {
-  const { rows: logs } = await pool.query(
-    `SELECT module, created_at FROM logs
-     WHERE telegram_id = $1 AND created_at >= $2
-     ORDER BY created_at ASC`,
-    [String(telegramId), utcDaysAgoString(days)]
-  );
-
-  const dates = [];
-  const today = new Date();
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    dates.push(almatyDateString(d));
-  }
-
-  const grid = { sleep: [], mood: [], cognitive: [] };
-  const markedByModule = { sleep: new Set(), mood: new Set(), cognitive: new Set() };
-
-  logs.forEach((log) => {
-    // created_at хранится в UTC ("YYYY-MM-DD HH:MI:SS"); переводим в Алматинские сутки.
-    const utcDate = new Date(`${log.created_at.replace(' ', 'T')}Z`);
-    const dayKey = almatyDateString(utcDate);
-    if (markedByModule[log.module]) markedByModule[log.module].add(dayKey);
-  });
-
-  dates.forEach((dayKey) => {
-    ['sleep', 'mood', 'cognitive'].forEach((moduleName) => {
-      grid[moduleName].push(markedByModule[moduleName].has(dayKey) ? 1 : 0);
-    });
-  });
-
-  return { dates, grid };
-}
-
 // Одна запись в день на пользователя — повторная отправка в тот же Алматинский день
 // обновляет ту же строку и помечает её corrected_manually (основа для "Исправить",
 // ТЗ 6.3.4) — естественное следствие upsert по (telegram_id, checkin_date).
@@ -348,11 +282,7 @@ module.exports = {
   setUserLanguage,
   upsertUserConsent,
   setReminderOptIn,
-  touchUser,
   touchOrCreateUser,
-  insertLog,
-  getRecentLogs,
-  getProgressGrid,
   upsertDailyCheckin,
   getTodayCheckin,
   getCheckinHistory,
