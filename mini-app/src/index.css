@@ -264,6 +264,63 @@ h1 {
   margin: 0;
 }
 
+.protocol-reason {
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--sw-terracotta);
+  margin: 0 0 10px;
+}
+
+.weekly-chart {
+  background: var(--secondary-bg);
+  border-radius: var(--card-radius);
+  padding: 16px 16px 12px;
+  margin: 8px 0 20px;
+}
+
+.weekly-chart-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 11px;
+  color: var(--hint);
+  margin-top: 2px;
+}
+
+.weekly-chart-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  padding: 0 4px;
+}
+
+.weekly-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.weekly-chart-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.doctor-nudge {
+  background: var(--secondary-bg);
+  border-left: 3px solid var(--sw-wine);
+  border-radius: var(--card-radius);
+  padding: 14px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 4px 0 20px;
+}
+
 .scales {
   display: flex;
   flex-direction: column;
