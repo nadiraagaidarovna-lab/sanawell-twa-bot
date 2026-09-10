@@ -1,8 +1,9 @@
 // TechniquesScreen.tsx — «Все техники самопомощи» на /checkin/ (Срез Б, ТЗ 5.4/5.5, см.
 // CLAUDE.md): полная библиотека немедикаментозных техник поверх уже существующего
-// GET /api/protocols (тот же контент, что был на маршруте /, без изменений бэкенда).
-// Каждая карточка — с объяснением физиологического механизма (раздел 5.4 ТЗ, тексты
-// утверждены Надирой) вместо прежнего однострочного note.
+// GET /api/protocols. Каждая карточка — с объяснением физиологического механизма
+// (раздел 5.4 ТЗ, тексты утверждены Надирой) вместо однострочного note.
+// Срез Т добавил модули 'nutrition'/'strength' (питание, силовые/весонесущие нагрузки) —
+// самостоятельные направления библиотеки, не привязанные к измерениям чек-ина.
 import { useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 
@@ -22,9 +23,11 @@ const MODULE_LABELS: Record<string, string> = {
   sleep: 'Сон',
   mood: 'Настроение',
   cognitive: 'Голова',
+  nutrition: 'Питание',
+  strength: 'Сила и кости',
 };
 
-const MODULE_ORDER = ['sleep', 'mood', 'cognitive'];
+const MODULE_ORDER = ['sleep', 'mood', 'cognitive', 'nutrition', 'strength'];
 
 export default function TechniquesScreen() {
   const [view, setView] = useState<ViewState>('loading');
