@@ -1,47 +1,108 @@
-// WelcomeScreen.tsx — Срез 1 Этапа 2: приветственный экран онбординга (ТЗ 6.2, шаг 1 /
-// 6.2.1). Чистый контент/UI — вопрос о пути менопаузы, реальный выбор языка интерфейса
-// и согласия добавят следующие срезы; чек-ин (HomeScreen/CheckinScreen) не тронут.
-//
-// Переключатель ru/kk здесь — временная возможность ПРОСМОТРЕТЬ оба варианта утверждённого
-// текста, не полноценный выбор языка интерфейса (тот — отдельный шаг 3 в ТЗ 6.2, будущий
-// срез с сохранением на бэкенде). Ничего не персистится.
+// WelcomeScreen.tsx — Шаг 0 постоянного онбординга (ТЗ v2.12, раздел 6.2.1; Срез О3).
+// Заменяет прежний формат этого экрана целиком: раньше — 6 свайп-карточек с текстом
+// "Здравствуй, дорогая подруга" (Этап 2, Срез 1), который в v2.12 явно упразднён как
+// активный экран продукта (полный старый текст сохранён в ТЗ только "справочно").
+// Показ гейтится флагом onboarding_welcome_seen — сама логика "показывать или сразу
+// на home" живёт в App.tsx, этот компонент просто рендерит экран, когда его вызвали
+// (либо первый раз для новой пользовательницы, либо вручную из настроек HomeScreen).
 import { useState } from 'react';
-import SwipeCards from '../components/SwipeCards';
-import { useMainButton } from '../lib/useMainButton';
+import { apiFetch } from '../lib/api';
 import { useNavigation } from '../lib/useNavigation';
-import { WELCOME_CARDS, type Lang } from '../content/welcomeScreen';
+import { useMainButton } from '../lib/useMainButton';
 
-const MAIN_BUTTON_TEXT: Record<Lang, { next: string; start: string }> = {
-  ru: { next: 'Далее', start: 'Начнём' },
-  kk: { next: 'Келесі', start: 'Бастайық' },
+type Lang = 'ru' | 'kk';
+
+const SUPPORTED_LANGS: Lang[] = ['ru', 'kk'];
+
+// Раздел 6.2.1 ТЗ v2.12 — русский текст финальный (дословно, не перефразировать),
+// казахский — черновик, требует проверки носителем языка перед публикацией.
+const TEXT: Record<
+  Lang,
+  { title: string; description: string; disclaimer: string; button: string; hint: string }
+> = {
+  ru: {
+    title: 'Твоя опора в переменах после 40',
+    description:
+      'SanaWell AI помогает понять, что происходит с телом и настроением во время гормональной перестройки — простыми словами, без диагнозов и тревоги. Чек-ин, техники для сна и энергии, забота о себе каждый день.',
+    disclaimer:
+      'Это не медицинское приложение: оно не заменяет врача, а помогает вовремя к нему обратиться.',
+    button: 'Начать',
+    hint: 'Язык определён автоматически по Telegram — сменить можно в любой момент.',
+  },
+  kk: {
+    title: '40 жастан кейінгі өзгерістердегі сенімді серігің',
+    description:
+      'SanaWell AI гормоналдық өзгерістер кезінде денең мен көңіл-күйіңде не болып жатқанын түсінуге көмектеседі — қарапайым тілмен, диагнозсыз және қорқынышсыз. Күнделікті өзін-өзі тексеру, ұйқы мен қуат үшін жаттығулар, өзіңе деген күнделікті қамқорлық.',
+    disclaimer:
+      'Бұл — медициналық қосымша емес: ол дәрігерді алмастырмайды, керісінше, қажет кезде оған уақытында жүгінуге көмектеседі.',
+    button: 'Бастау',
+    hint: 'Тілді Telegram бойынша автоматты түрде анықтадық — қажет болса, кез келген уақытта ауыстыра аласың.',
+  },
 };
 
-export default function WelcomeScreen() {
-  const { push } = useNavigation();
-  const [lang, setLang] = useState<Lang>('ru');
-  const [cardIndex, setCardIndex] = useState(0);
+declare global {
+  interface Window {
+    Telegram?: { WebApp?: { initDataUnsafe?: { user?: { language_code?: string } } } };
+  }
+}
 
-  const cards = WELCOME_CARDS[lang];
-  const isLastCard = cardIndex === cards.length - 1;
+function detectLanguage(): Lang {
+  const tgCode = window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code;
+  return (SUPPORTED_LANGS as string[]).includes(tgCode ?? '') ? (tgCode as Lang) : 'ru';
+}
+
+interface WelcomeScreenProps {
+  // Ручной выбор языка (поле language, срез Г) в приоритете над автоопределением —
+  // передаётся сверху из App.tsx, у которого он уже есть из того же вызова GET /api/me,
+  // которым App.tsx решал, показывать ли вообще этот экран (см. App.tsx).
+  savedLanguage: string | null;
+}
+
+export default function WelcomeScreen({ savedLanguage }: WelcomeScreenProps) {
+  const { push } = useNavigation();
+  const [lang, setLang] = useState<Lang>(() =>
+    savedLanguage === 'ru' || savedLanguage === 'kk' ? savedLanguage : detectLanguage()
+  );
+  const [submitting, setSubmitting] = useState(false);
 
   const handleLangChange = (next: Lang) => {
     setLang(next);
-    setCardIndex(0);
+    apiFetch('/language', { method: 'POST', body: JSON.stringify({ language: next }) }).catch(() => {
+      // Не блокируем UI сетевой ошибкой — тот же паттерн, что и на HomeScreen.
+    });
+  };
+
+  const handleStart = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      // Ждём ответ сервера ДО навигации — если Mini App закроют раньше, чем сервер
+      // подтвердит, флаг onboarding_welcome_seen не выставится, и без этого ожидания
+      // экран показался бы снова при следующем открытии (гонка, явно оговорена в ТЗ).
+      await apiFetch('/onboarding-welcome-seen', { method: 'POST' });
+    } catch {
+      // Сетевая ошибка не должна запирать женщину на этом экране — единственное
+      // следствие пропуска шага ниже: экран покажется ещё раз в следующий раз.
+    }
+    push('home');
   };
 
   useMainButton({
-    text: isLastCard ? MAIN_BUTTON_TEXT[lang].start : MAIN_BUTTON_TEXT[lang].next,
-    onClick: () => {
-      if (isLastCard) {
-        push('home');
-      } else {
-        setCardIndex((i) => i + 1);
-      }
-    },
+    text: TEXT[lang].button,
+    onClick: handleStart,
+    isEnabled: !submitting,
+    isLoaderVisible: submitting,
   });
 
+  const t = TEXT[lang];
+
   return (
-    <main className="screen">
+    <main className="screen onboarding-welcome">
+      <p className="onboarding-welcome-logo">SanaWell AI</p>
+      <h1>{t.title}</h1>
+      <p className="body-text">{t.description}</p>
+      <p className="onboarding-welcome-disclaimer">{t.disclaimer}</p>
+
       <div className="lang-toggle">
         <button
           type="button"
@@ -59,8 +120,7 @@ export default function WelcomeScreen() {
         </button>
       </div>
 
-      <p className="eyebrow">SanaWell</p>
-      <SwipeCards cards={cards} index={cardIndex} onIndexChange={setCardIndex} />
+      <p className="onboarding-welcome-hint">{t.hint}</p>
     </main>
   );
 }

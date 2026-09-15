@@ -56,6 +56,12 @@ async function initSchema() {
       -- другое, у каждого своя кнопка "Отключить" в чате (см. bot.js).
       habits_reminder_opt_in         INTEGER NOT NULL DEFAULT 0,
       last_habits_reminder_sent_date TEXT,
+      -- Срез О3 (ТЗ v2.12, раздел 6.2.1): гейт "показать экран приветствия (Шаг 0) один
+      -- раз". Ключ — telegram_id, не устройство/localStorage, иначе гейт слетит при смене
+      -- телефона или переустановке Telegram. Выставляется в true синхронно с переходом на
+      -- главный экран (см. POST /api/onboarding-welcome-seen), не сбрасывается ручным
+      -- повторным показом из настроек ("Показать приветствие снова").
+      onboarding_welcome_seen        BOOLEAN NOT NULL DEFAULT false,
       created_at                     TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'),
       last_seen_at                   TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
     );
@@ -70,6 +76,7 @@ async function initSchema() {
       CHECK (menopause_path IN ('natural', 'surgical', 'oncological') OR menopause_path IS NULL);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS habits_reminder_opt_in INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_habits_reminder_sent_date TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_welcome_seen BOOLEAN NOT NULL DEFAULT false;
 
     -- Один лог = одна отметка по одному из трёх модулей старого трекера (module: 'sleep'
     -- | 'mood' | 'cognitive'). Осиротела после Среза В (маршрут / упразднён); роуты и
@@ -183,6 +190,17 @@ async function setUserLanguage(telegramId, language) {
   if (!SUPPORTED_LANGUAGES.includes(language)) return;
   await touchOrCreateUser(telegramId);
   await pool.query('UPDATE users SET language = $1 WHERE telegram_id = $2', [language, String(telegramId)]);
+}
+
+// Срез О3: гейт "Шаг 0 показан один раз" — чтение идёт через уже существующий getUser()
+// (тот же паттерн, что у остальных полей users в GET /api/me), отдельного геттера не
+// заводим. Всегда true: "показать снова" из настроек — навигация на фронтенде, флаг не
+// трогает.
+async function setOnboardingWelcomeSeen(telegramId) {
+  await touchOrCreateUser(telegramId);
+  await pool.query('UPDATE users SET onboarding_welcome_seen = true WHERE telegram_id = $1', [
+    String(telegramId),
+  ]);
 }
 
 const MENOPAUSE_PATHS = ['natural', 'surgical', 'oncological'];
@@ -361,6 +379,7 @@ module.exports = {
   initSchema,
   getUser,
   setUserLanguage,
+  setOnboardingWelcomeSeen,
   setMenopausePath,
   setMedicalDisclaimerConsent,
   setDataStorageConsent,

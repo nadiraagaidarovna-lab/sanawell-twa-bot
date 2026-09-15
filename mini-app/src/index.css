@@ -431,3 +431,36 @@ h1 {
   font-family: inherit;
   resize: none;
 }
+
+/* Шаг 0 онбординга (Срез О3, ТЗ 6.2.1) — единственный экран с собственным, специфичным
+   фоном: тёплый пудрово-розовый, а не базовый --bg/--sw-cream, который используется везде
+   остальное. Терракота/золото/вино — акцентами поверх него, не базовый фон сами по себе. */
+.onboarding-welcome {
+  background: #f7e3dc;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.onboarding-welcome-logo {
+  color: var(--sw-wine);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 0 0 20px;
+}
+
+.onboarding-welcome-disclaimer {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hint);
+  margin: 0 0 28px;
+}
+
+.onboarding-welcome-hint {
+  font-size: 12px;
+  color: var(--hint);
+  text-align: center;
+  margin: 18px 0 0;
+}

@@ -58,6 +58,9 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         menopausePath: user ? user.menopause_path : null,
         medicalDisclaimerConsented: !!(user && user.medical_disclaimer_consent_at),
         dataStorageConsented: !!(user && user.data_storage_consent_at),
+        // Срез О3 (ТЗ v2.12, 6.2.1) — гейт показа экрана приветствия (Шаг 0), отдельно
+        // от onboarded выше (та же цепочка полей и логика О1, этот срез её не трогает).
+        onboardingWelcomeSeen: !!(user && user.onboarding_welcome_seen),
       });
     })
   );
@@ -73,6 +76,18 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         return res.status(400).json({ error: 'invalid_language' });
       }
       await db.setUserLanguage(req.telegramId, language);
+      res.json({ ok: true });
+    })
+  );
+
+  // Срез О3 (ТЗ v2.12, 6.2.1): гейт "Шаг 0 показан один раз". Фронтенд ждёт ответ этого
+  // запроса ДО навигации на главный экран (см. WelcomeScreen.tsx) — иначе закрытие Mini App
+  // до ответа сервера оставило бы флаг не выставленным, и экран показался бы снова.
+  router.post(
+    '/onboarding-welcome-seen',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await db.setOnboardingWelcomeSeen(req.telegramId);
       res.json({ ok: true });
     })
   );
