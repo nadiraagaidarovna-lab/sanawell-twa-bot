@@ -62,6 +62,31 @@ async function initSchema() {
       -- главный экран (см. POST /api/onboarding-welcome-seen), не сбрасывается ручным
       -- повторным показом из настроек ("Показать приветствие снова").
       onboarding_welcome_seen        BOOLEAN NOT NULL DEFAULT false,
+      -- Срез О2, Промпт 1/4 (ТЗ v2.13, раздел 6.2.2) — анкета онбординга, шаги 1-7. Путь
+      -- менопаузы (шаг 4) переиспользует menopause_path из Среза О1 — новая колонка под
+      -- него не заводится. Все поля ниже намеренно nullable/false по умолчанию: анкета
+      -- целиком пропускаема и сохраняется по шагам, ни одно поле не обязательно для уже
+      -- существующих пользователей, которые её ещё не проходили.
+      display_name                   TEXT,
+      age_range                      TEXT CHECK (age_range IN
+        ('35_39', '40_44', '45_49', '50_54', '55_59', '60_plus', 'prefer_not_to_say') OR age_range IS NULL),
+      self_perceived_stage           TEXT CHECK (self_perceived_stage IN
+        ('perimenopause', 'menopause', 'postmenopause', 'unsure') OR self_perceived_stage IS NULL),
+      lifestyle_activity             TEXT CHECK (lifestyle_activity IN
+        ('low', 'sometimes', 'active') OR lifestyle_activity IS NULL),
+      lifestyle_diet                 TEXT CHECK (lifestyle_diet IN
+        ('regular', 'vegetarian', 'lactose_free', 'other', 'prefer_not_to_say') OR lifestyle_diet IS NULL),
+      stress_level                   INTEGER CHECK (stress_level BETWEEN 1 AND 10 OR stress_level IS NULL),
+      -- Свободный текст, не enum: один из вариантов шага 5 ("Своё") — открытое поле,
+      -- поэтому остальные предустановленные варианты тоже хранятся как обычный текст
+      -- этого же поля, а не отдельным кодом/enum (сама формулировка и есть значение).
+      goal                           TEXT,
+      -- Чек-лист симптомов (шаг 7, раздел 6.2.2) — произвольная JSON-структура по
+      -- категориям (приливы/настроение/голова/тело/сон/близость), формируется фронтендом
+      -- в Промпте 2-4; бэкенд намеренно не валидирует точные ключи — состав пунктов может
+      -- ещё чуть измениться при вёрстке экрана, не должно требовать новой миграции.
+      symptom_checklist              JSONB,
+      onboarding_anketa_completed    BOOLEAN NOT NULL DEFAULT false,
       created_at                     TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS'),
       last_seen_at                   TEXT NOT NULL DEFAULT to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD HH24:MI:SS')
     );
@@ -77,6 +102,20 @@ async function initSchema() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS habits_reminder_opt_in INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_habits_reminder_sent_date TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_welcome_seen BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS age_range TEXT
+      CHECK (age_range IN ('35_39', '40_44', '45_49', '50_54', '55_59', '60_plus', 'prefer_not_to_say') OR age_range IS NULL);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS self_perceived_stage TEXT
+      CHECK (self_perceived_stage IN ('perimenopause', 'menopause', 'postmenopause', 'unsure') OR self_perceived_stage IS NULL);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS lifestyle_activity TEXT
+      CHECK (lifestyle_activity IN ('low', 'sometimes', 'active') OR lifestyle_activity IS NULL);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS lifestyle_diet TEXT
+      CHECK (lifestyle_diet IN ('regular', 'vegetarian', 'lactose_free', 'other', 'prefer_not_to_say') OR lifestyle_diet IS NULL);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS stress_level INTEGER
+      CHECK (stress_level BETWEEN 1 AND 10 OR stress_level IS NULL);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS goal TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS symptom_checklist JSONB;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_anketa_completed BOOLEAN NOT NULL DEFAULT false;
 
     -- Один лог = одна отметка по одному из трёх модулей старого трекера (module: 'sleep'
     -- | 'mood' | 'cognitive'). Осиротела после Среза В (маршрут / упразднён); роуты и
@@ -210,6 +249,96 @@ async function setMenopausePath(telegramId, path) {
   await touchOrCreateUser(telegramId);
   await pool.query('UPDATE users SET menopause_path = $1 WHERE telegram_id = $2', [
     path,
+    String(telegramId),
+  ]);
+}
+
+// Срез О2, Промпт 1/4 (ТЗ v2.13, раздел 6.2.2) — анкета онбординга, шаги 1-7, сохраняется
+// по шагам (каждый шаг — свой вызов), не одной большой формой. Шаг 4 (путь) переиспользует
+// setMenopausePath выше, отдельного сеттера для него здесь нет.
+const AGE_RANGES = ['35_39', '40_44', '45_49', '50_54', '55_59', '60_plus', 'prefer_not_to_say'];
+const SELF_PERCEIVED_STAGES = ['perimenopause', 'menopause', 'postmenopause', 'unsure'];
+const LIFESTYLE_ACTIVITIES = ['low', 'sometimes', 'active'];
+const LIFESTYLE_DIETS = ['regular', 'vegetarian', 'lactose_free', 'other', 'prefer_not_to_say'];
+
+// Свободный текст (необязательный "как вас называть") — не enum, обрезаем на случай
+// злоупотребления, не отклоняем: это не критичное поле, не стоит того, чтобы блокировать
+// шаг анкеты 400-й ошибкой из-за длины имени.
+async function setDisplayName(telegramId, displayName) {
+  await touchOrCreateUser(telegramId);
+  const value = typeof displayName === 'string' ? displayName.trim().slice(0, 100) || null : null;
+  await pool.query('UPDATE users SET display_name = $1 WHERE telegram_id = $2', [
+    value,
+    String(telegramId),
+  ]);
+}
+
+async function setAgeRange(telegramId, ageRange) {
+  if (!AGE_RANGES.includes(ageRange)) return;
+  await touchOrCreateUser(telegramId);
+  await pool.query('UPDATE users SET age_range = $1 WHERE telegram_id = $2', [
+    ageRange,
+    String(telegramId),
+  ]);
+}
+
+async function setSelfPerceivedStage(telegramId, stage) {
+  if (!SELF_PERCEIVED_STAGES.includes(stage)) return;
+  await touchOrCreateUser(telegramId);
+  await pool.query('UPDATE users SET self_perceived_stage = $1 WHERE telegram_id = $2', [
+    stage,
+    String(telegramId),
+  ]);
+}
+
+// Свободный текст, не enum: один из вариантов шага 5 ("Своё") — открытое поле, см. коммент
+// у схемы в initSchema().
+async function setGoal(telegramId, goal) {
+  await touchOrCreateUser(telegramId);
+  const value = typeof goal === 'string' ? goal.trim().slice(0, 200) || null : null;
+  await pool.query('UPDATE users SET goal = $1 WHERE telegram_id = $2', [value, String(telegramId)]);
+}
+
+// Шаг 6 — один блок из 3 подвопросов, полностью необязательный и пропускаемый целиком
+// (раздел 6.2.2) — поэтому один эндпоинт/вызов на весь шаг, а не три отдельных, в отличие
+// от остальных шагов анкеты. Каждое из трёх полей независимо необязательно: невалидное или
+// отсутствующее значение просто записывается как NULL (не отклоняем весь запрос из-за
+// одного поля) — так можно, например, ответить на вопрос про стресс и пропустить питание.
+async function setLifestyle(telegramId, { activity, diet, stressLevel }) {
+  const activityValue = LIFESTYLE_ACTIVITIES.includes(activity) ? activity : null;
+  const dietValue = LIFESTYLE_DIETS.includes(diet) ? diet : null;
+  const stressValue =
+    Number.isInteger(stressLevel) && stressLevel >= 1 && stressLevel <= 10 ? stressLevel : null;
+
+  await touchOrCreateUser(telegramId);
+  await pool.query(
+    'UPDATE users SET lifestyle_activity = $1, lifestyle_diet = $2, stress_level = $3 WHERE telegram_id = $4',
+    [activityValue, dietValue, stressValue, String(telegramId)]
+  );
+}
+
+// Шаг 7 — чек-лист симптомов, JSONB. Бэкенд намеренно не проверяет точные ключи/категории
+// (см. коммент у схемы) — только что это действительно объект, а не строка/массив/примитив,
+// чтобы не записать в JSONB что попало из неправильно собранного фронтенда.
+async function setSymptomChecklist(telegramId, checklist) {
+  const isPlainObject =
+    checklist !== null && typeof checklist === 'object' && !Array.isArray(checklist);
+  if (!isPlainObject) return;
+
+  await touchOrCreateUser(telegramId);
+  await pool.query('UPDATE users SET symptom_checklist = $1 WHERE telegram_id = $2', [
+    JSON.stringify(checklist),
+    String(telegramId),
+  ]);
+}
+
+// Отдельный флаг завершения анкеты целиком (все 7 шагов пройдены или осознанно
+// пропущены) — по аналогии с onboarding_welcome_seen у Шага 0, отдельное поле от
+// onboarded (Срез О1: путь + оба обязательных согласия), т.к. это независимые части
+// онбординга с разным порядком прохождения в итоговом флоу (Срез О6).
+async function setOnboardingAnketaCompleted(telegramId) {
+  await touchOrCreateUser(telegramId);
+  await pool.query('UPDATE users SET onboarding_anketa_completed = true WHERE telegram_id = $1', [
     String(telegramId),
   ]);
 }
@@ -385,6 +514,13 @@ module.exports = {
   setDataStorageConsent,
   setReminderOptIn,
   setHabitsReminderOptIn,
+  setDisplayName,
+  setAgeRange,
+  setSelfPerceivedStage,
+  setGoal,
+  setLifestyle,
+  setSymptomChecklist,
+  setOnboardingAnketaCompleted,
   touchOrCreateUser,
   upsertDailyCheckin,
   getTodayCheckin,
@@ -399,4 +535,8 @@ module.exports = {
   almatyDateString,
   SUPPORTED_LANGUAGES,
   MENOPAUSE_PATHS,
+  AGE_RANGES,
+  SELF_PERCEIVED_STAGES,
+  LIFESTYLE_ACTIVITIES,
+  LIFESTYLE_DIETS,
 };

@@ -61,6 +61,18 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         // Срез О3 (ТЗ v2.12, 6.2.1) — гейт показа экрана приветствия (Шаг 0), отдельно
         // от onboarded выше (та же цепочка полей и логика О1, этот срез её не трогает).
         onboardingWelcomeSeen: !!(user && user.onboarding_welcome_seen),
+        // Срез О2, Промпт 1/4 (ТЗ v2.13, 6.2.2) — анкета онбординга, шаги 1-7. Отдельный
+        // флаг от onboarded/onboardingWelcomeSeen выше — независимая часть флоу (Срез О6
+        // соберёт всё в одну последовательность позже, здесь только данные и гейт).
+        displayName: user ? user.display_name : null,
+        ageRange: user ? user.age_range : null,
+        selfPerceivedStage: user ? user.self_perceived_stage : null,
+        lifestyleActivity: user ? user.lifestyle_activity : null,
+        lifestyleDiet: user ? user.lifestyle_diet : null,
+        stressLevel: user ? user.stress_level : null,
+        goal: user ? user.goal : null,
+        symptomChecklist: user ? user.symptom_checklist : null,
+        onboardingAnketaCompleted: !!(user && user.onboarding_anketa_completed),
       });
     })
   );
@@ -103,6 +115,109 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         return res.status(400).json({ error: 'invalid_menopause_path' });
       }
       await db.setMenopausePath(req.telegramId, path);
+      res.json({ ok: true });
+    })
+  );
+
+  // Срез О2, Промпт 1/4 (ТЗ v2.13, раздел 6.2.2) — анкета онбординга, шаги 1-7, сохраняется
+  // по шагам (свой запрос на каждый шаг), не одной формой в конце. Шаг 4 (путь) переиспользует
+  // POST /api/menopause-path выше — отдельного эндпоинта под него здесь нет.
+
+  // Шаг 1 — имя.
+  router.post(
+    '/anketa/name',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { displayName } = req.body || {};
+      if (displayName !== undefined && displayName !== null && typeof displayName !== 'string') {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      await db.setDisplayName(req.telegramId, displayName ?? null);
+      res.json({ ok: true });
+    })
+  );
+
+  // Шаг 2 — возраст.
+  router.post(
+    '/anketa/age-range',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { ageRange } = req.body || {};
+      if (!db.AGE_RANGES.includes(ageRange)) {
+        return res.status(400).json({ error: 'invalid_age_range' });
+      }
+      await db.setAgeRange(req.telegramId, ageRange);
+      res.json({ ok: true });
+    })
+  );
+
+  // Шаг 3 — самоощущаемый этап (субъективная самооценка, не диагностический вывод
+  // приложения — раздел 9.2 ТЗ).
+  router.post(
+    '/anketa/self-perceived-stage',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { stage } = req.body || {};
+      if (!db.SELF_PERCEIVED_STAGES.includes(stage)) {
+        return res.status(400).json({ error: 'invalid_self_perceived_stage' });
+      }
+      await db.setSelfPerceivedStage(req.telegramId, stage);
+      res.json({ ok: true });
+    })
+  );
+
+  // Шаг 5 — цель. Свободный текст (один из вариантов — "Своё", открытое поле), поэтому
+  // здесь нет enum-валидации, только ограничение длины (см. db.setGoal).
+  router.post(
+    '/anketa/goal',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { goal } = req.body || {};
+      if (goal !== undefined && goal !== null && typeof goal !== 'string') {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      await db.setGoal(req.telegramId, goal ?? null);
+      res.json({ ok: true });
+    })
+  );
+
+  // Шаг 6 — образ жизни: один запрос на весь блок (не три отдельных) — весь шаг
+  // пропускается одной кнопкой в интерфейсе (раздел 6.2.2 ТЗ). Каждое из трёх полей
+  // необязательно и независимо валидируется в db.setLifestyle — невалидное/отсутствующее
+  // значение отдельного поля не отклоняет весь запрос.
+  router.post(
+    '/anketa/lifestyle',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { activity, diet, stressLevel } = req.body || {};
+      await db.setLifestyle(req.telegramId, { activity, diet, stressLevel });
+      res.json({ ok: true });
+    })
+  );
+
+  // Шаг 7 — чек-лист симптомов (мультивыбор по категориям, без баллов/вердикта).
+  router.post(
+    '/anketa/symptoms',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { checklist } = req.body || {};
+      const isPlainObject = checklist !== null && typeof checklist === 'object' && !Array.isArray(checklist);
+      if (!isPlainObject) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      await db.setSymptomChecklist(req.telegramId, checklist);
+      res.json({ ok: true });
+    })
+  );
+
+  // Завершение анкеты целиком (все 7 шагов пройдены или осознанно пропущены) — вызывается
+  // фронтендом один раз после последнего шага, отдельно от onboarding_welcome_seen (Шаг 0)
+  // и от onboarded (О1) — независимая часть флоу до финальной сборки в Срезе О6.
+  router.post(
+    '/anketa/complete',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await db.setOnboardingAnketaCompleted(req.telegramId);
       res.json({ ok: true });
     })
   );
