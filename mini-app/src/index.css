@@ -463,3 +463,94 @@ h1 {
   text-align: center;
   margin: 18px 0 0;
 }
+
+/* Анкета онбординга (Срез О2, шаги 1-7, ТЗ 6.2.2) — общие классы, переиспользуются
+   всеми 7 экранами. .anketa-question/.anketa-hint используют тот же масштаб текста, что
+   h1/.body-text в остальном приложении, просто с своими именами для явной привязки к
+   анкете, а не потому что стили отличаются. */
+.anketa-question {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.anketa-hint {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--hint);
+  margin: 0 0 18px;
+}
+
+.anketa-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.anketa-option {
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border: 1.5px solid var(--secondary-bg);
+  border-radius: var(--card-radius);
+  background: var(--secondary-bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.anketa-option.selected {
+  border-color: var(--sw-terracotta);
+  background: var(--bg);
+  color: var(--sw-terracotta);
+  font-weight: 600;
+}
+
+.anketa-teaser {
+  background: var(--secondary-bg);
+  border-left: 3px solid var(--sw-gold);
+  border-radius: var(--card-radius);
+  padding: 14px 16px;
+  margin: 4px 0 20px;
+}
+
+.anketa-teaser-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sw-wine);
+  margin: 0 0 6px;
+}
+
+.anketa-teaser-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0;
+}
+
+.anketa-lifestyle-block {
+  margin-bottom: 22px;
+}
+
+.anketa-lifestyle-question {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 10px;
+}
+
+.anketa-checklist-category {
+  margin-bottom: 18px;
+}
+
+.anketa-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  margin-top: 10px;
+}
