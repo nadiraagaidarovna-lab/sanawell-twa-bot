@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { useNavigation } from '../lib/useNavigation';
 import { useMainButton } from '../lib/useMainButton';
+import logo from '../assets/sanawell-logo.png';
 
 type Lang = 'ru' | 'kk';
 
@@ -98,7 +99,7 @@ export default function WelcomeScreen({ savedLanguage }: WelcomeScreenProps) {
 
   return (
     <main className="screen onboarding-welcome">
-      <p className="onboarding-welcome-logo">SanaWell AI</p>
+      <img src={logo} alt="SanaWell AI" className="onboarding-welcome-logo" />
       <h1>{t.title}</h1>
       <p className="body-text">{t.description}</p>
       <p className="onboarding-welcome-disclaimer">{t.disclaimer}</p>

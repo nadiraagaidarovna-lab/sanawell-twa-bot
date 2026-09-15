@@ -444,10 +444,9 @@ h1 {
 }
 
 .onboarding-welcome-logo {
-  color: var(--sw-wine);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  height: 96px;
+  width: auto;
+  object-fit: contain;
   margin: 0 0 20px;
 }
 
