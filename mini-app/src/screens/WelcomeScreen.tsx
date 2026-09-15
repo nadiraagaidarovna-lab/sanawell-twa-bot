@@ -10,6 +10,7 @@ import { apiFetch } from '../lib/api';
 import { useNavigation } from '../lib/useNavigation';
 import { useMainButton } from '../lib/useMainButton';
 import logo from '../assets/sanawell-logo.png';
+import type { ScreenId } from '../lib/navigationContext';
 
 type Lang = 'ru' | 'kk';
 
@@ -57,9 +58,14 @@ interface WelcomeScreenProps {
   // передаётся сверху из App.tsx, у которого он уже есть из того же вызова GET /api/me,
   // которым App.tsx решал, показывать ли вообще этот экран (см. App.tsx).
   savedLanguage: string | null;
+  // Срез О2, Промпт 3/4: куда вести по кнопке "Начать" — 'home', если анкета уже
+  // пройдена (в т.ч. при ручном повторном показе из настроек HomeScreen), иначе первый
+  // экран анкеты. Экран сам не знает и не должен знать про onboarding_anketa_completed —
+  // решение приходит сверху, тем же вызовом GET /api/me, что и savedLanguage выше.
+  nextScreen: ScreenId;
 }
 
-export default function WelcomeScreen({ savedLanguage }: WelcomeScreenProps) {
+export default function WelcomeScreen({ savedLanguage, nextScreen }: WelcomeScreenProps) {
   const { push } = useNavigation();
   const [lang, setLang] = useState<Lang>(() =>
     savedLanguage === 'ru' || savedLanguage === 'kk' ? savedLanguage : detectLanguage()
@@ -85,7 +91,7 @@ export default function WelcomeScreen({ savedLanguage }: WelcomeScreenProps) {
       // Сетевая ошибка не должна запирать женщину на этом экране — единственное
       // следствие пропуска шага ниже: экран покажется ещё раз в следующий раз.
     }
-    push('home');
+    push(nextScreen);
   };
 
   useMainButton({

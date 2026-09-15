@@ -1,6 +1,22 @@
 import { createContext } from 'react';
 
-export type ScreenId = 'welcome' | 'home' | 'checkin' | 'progress' | 'techniques' | 'partners';
+// Срез О2, Промпт 3/4: 7 экранов анкеты (ТЗ v2.13, 6.2.2) между 'welcome' (Шаг 0, Срез О3)
+// и 'home' — код самих экранов не в этом файле (см. screens/anketa/), здесь только ID
+// для стека навигации, тот же паттерн, что у остальных ScreenId.
+export type ScreenId =
+  | 'welcome'
+  | 'anketa-name'
+  | 'anketa-age'
+  | 'anketa-stage'
+  | 'anketa-path'
+  | 'anketa-goal'
+  | 'anketa-lifestyle'
+  | 'anketa-symptoms'
+  | 'home'
+  | 'checkin'
+  | 'progress'
+  | 'techniques'
+  | 'partners';
 
 export interface NavigationContextValue {
   screen: ScreenId;
