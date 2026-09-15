@@ -7,12 +7,18 @@
 // добавочно проверяет onboardingAnketaCompleted, решая и стартовый экран, и то, куда
 // ведёт кнопка "Начать" на Шаге 0 (welcomeNextScreen) — WelcomeScreen.tsx сам ничего не
 // знает про анкету, только принимает готовое решение сверху (см. его собственный коммент).
+// Срез О5, Промпт 2/2 (ТЗ v2.13, раздел 13): между Шагом 0 и анкетой добавлен экран
+// согласий (ConsentScreen, готов в Промпте 1/2) — тот же GET /api/me проверяет оба
+// согласия (dataStorageConsented/medicalDisclaimerConsented, поля и эндпоинты из Среза О1),
+// решая, показывать ли 'consent' вместо анкеты/home. ConsentScreen.tsx, как и WelcomeScreen,
+// сам не знает, куда ведёт "Продолжить" — получает готовое решение сверху.
 import { useEffect, useState } from 'react';
 import { NavigationProvider } from './lib/navigation';
 import { useNavigation } from './lib/useNavigation';
 import { useBackButton } from './lib/useBackButton';
 import { apiFetch } from './lib/api';
 import WelcomeScreen from './screens/WelcomeScreen';
+import ConsentScreen from './screens/ConsentScreen';
 import HomeScreen from './screens/HomeScreen';
 import CheckinScreen from './screens/CheckinScreen';
 import ProgressScreen from './screens/ProgressScreen';
@@ -31,7 +37,21 @@ import type { Lang } from './content/anketa';
 interface MeGateResponse {
   onboardingWelcomeSeen: boolean;
   onboardingAnketaCompleted: boolean;
+  dataStorageConsented: boolean;
+  medicalDisclaimerConsented: boolean;
   language: string | null;
+}
+
+// Экран согласий обязателен (ТЗ раздел 13) — показываем, пока не даны ОБА согласия.
+function needsConsent(me: MeGateResponse): boolean {
+  return !me.dataStorageConsented || !me.medicalDisclaimerConsented;
+}
+
+// Куда вести после согласий (или сразу, если согласия уже даны и экран пропущен) — та же
+// логика, что раньше была "куда ведёт Шаг 0", просто вынесена в отдельную функцию, т.к.
+// теперь между ними может быть экран согласий.
+function afterConsentScreen(me: MeGateResponse): ScreenId {
+  return me.onboardingAnketaCompleted ? 'home' : 'anketa-name';
 }
 
 // Срез О2, Промпт 3/4 — порядок шагов анкеты (ТЗ 6.2.2), сразу после Шага 0 (Срез О3) и
@@ -126,14 +146,17 @@ function AnketaStepScreen({ screen, lang, onLangChange }: AnketaStepScreenProps)
 function Screens({
   savedLanguage,
   welcomeNextScreen,
+  consentNextScreen,
 }: {
   savedLanguage: string | null;
   welcomeNextScreen: ScreenId;
+  consentNextScreen: ScreenId;
 }) {
-  const { screen, canGoBack, back } = useNavigation();
+  const { screen, canGoBack, back, push } = useNavigation();
   // Один язык на всю анкету, не по экрану — переключение на любом шаге должно быть видно
   // на всех остальных, если вернуться назад, та же логика, что уже была бы у одного
-  // многошагового экрана, просто анкета физически разбита на отдельные ScreenId.
+  // многошагового экрана, просто анкета физически разбита на отдельные ScreenId. Экран
+  // согласий переиспользует то же состояние языка (тот же непрерывный кусок онбординга).
   const [anketaLang, setAnketaLang] = useState<Lang>(() => resolveInitialLang(savedLanguage));
 
   useBackButton(canGoBack ? back : null);
@@ -143,6 +166,10 @@ function Screens({
   }
 
   switch (screen) {
+    case 'consent':
+      return (
+        <ConsentScreen lang={anketaLang} onLangChange={setAnketaLang} onNext={() => push(consentNextScreen)} />
+      );
     case 'checkin':
       return <CheckinScreen />;
     case 'progress':
@@ -166,6 +193,7 @@ type GateState =
       initialScreen: ScreenId;
       savedLanguage: string | null;
       welcomeNextScreen: ScreenId;
+      consentNextScreen: ScreenId;
     };
 
 function App() {
@@ -178,20 +206,30 @@ function App() {
       .then((me) => {
         if (cancelled) return;
 
-        const welcomeNextScreen: ScreenId = me.onboardingAnketaCompleted ? 'home' : 'anketa-name';
+        const consentNextScreen: ScreenId = afterConsentScreen(me);
+        const welcomeNextScreen: ScreenId = needsConsent(me) ? 'consent' : consentNextScreen;
         const initialScreen: ScreenId = !me.onboardingWelcomeSeen ? 'welcome' : welcomeNextScreen;
 
-        setGate({ status: 'ready', initialScreen, savedLanguage: me.language, welcomeNextScreen });
+        setGate({
+          status: 'ready',
+          initialScreen,
+          savedLanguage: me.language,
+          welcomeNextScreen,
+          consentNextScreen,
+        });
       })
       .catch(() => {
         // Не можем подтвердить initData/достучаться до сервера — безопаснее показать Шаг 0
-        // ещё раз, чем молча пропустить его (и анкету за ним) для новой пользовательницы.
+        // ещё раз, чем молча пропустить его (и согласия/анкету за ним) для новой
+        // пользовательницы. По той же логике, раз состояние согласий неизвестно —
+        // welcomeNextScreen ведёт на 'consent', а не сразу на анкету.
         if (!cancelled) {
           setGate({
             status: 'ready',
             initialScreen: 'welcome',
             savedLanguage: null,
-            welcomeNextScreen: 'anketa-name',
+            welcomeNextScreen: 'consent',
+            consentNextScreen: 'anketa-name',
           });
         }
       });
@@ -207,7 +245,11 @@ function App() {
 
   return (
     <NavigationProvider initialScreen={gate.initialScreen}>
-      <Screens savedLanguage={gate.savedLanguage} welcomeNextScreen={gate.welcomeNextScreen} />
+      <Screens
+        savedLanguage={gate.savedLanguage}
+        welcomeNextScreen={gate.welcomeNextScreen}
+        consentNextScreen={gate.consentNextScreen}
+      />
     </NavigationProvider>
   );
 }
