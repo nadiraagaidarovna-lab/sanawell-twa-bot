@@ -804,3 +804,17 @@ h1 {
 .v2-accent-c6 .protocol-reason {
   color: var(--v2-c6);
 }
+
+/* Срез Д, Промпт 4 — GuideScreen.tsx (папка «Гид», Тема 0 «Этапы жизни после 40» через
+   SwipeCards.tsx). .body-text/.swipe-dot сами по себе не трогаем — переопределение только
+   под .v2-screen/.v2-accent-c3, тот же паттерн, что и раньше. --v2-c3 (пудрово-розовый) —
+   акцент именно этой папки. */
+.v2-screen .body-text {
+  color: var(--v2-ink);
+}
+.v2-screen .swipe-dot {
+  background: var(--v2-surface-2);
+}
+.v2-accent-c3 .swipe-dot.active {
+  background: var(--v2-c3);
+}
