@@ -15,10 +15,13 @@ const PAD_Y = 14;
 
 type SeriesKey = 'sleepScore' | 'moodScore' | 'memoryScore';
 
+// Срез Д, Промпт 3/5: цвета переведены на --v2-* (адаптируются под светлую/тёмную тему) —
+// --sw-wine был фиксированным тёмным без вариантов, на тёмном пудровом фоне линия и точки
+// "Настроение" были бы почти невидимы; остальные два ряда — та же логика для единообразия.
 const SERIES: { key: SeriesKey; color: string; label: string }[] = [
-  { key: 'sleepScore', color: 'var(--sw-terracotta)', label: 'Сон' },
-  { key: 'moodScore', color: 'var(--sw-wine)', label: 'Настроение' },
-  { key: 'memoryScore', color: 'var(--sw-gold)', label: 'Голова' },
+  { key: 'sleepScore', color: 'var(--v2-terracotta)', label: 'Сон' },
+  { key: 'moodScore', color: 'var(--v2-wine)', label: 'Настроение' },
+  { key: 'memoryScore', color: 'var(--v2-gold)', label: 'Голова' },
 ];
 
 function scaleX(index: number, count: number): number {

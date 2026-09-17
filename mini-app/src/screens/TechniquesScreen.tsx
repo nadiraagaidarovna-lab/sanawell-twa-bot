@@ -10,6 +10,10 @@
 // 5 модулей в 5 направлений wellness-плана по разделу 4.4.1 (Когнитивное здоровье/
 // Нейропластичность/Физическая нагрузка/Питание и нутрициология/Психологическое
 // благополучие) — отдельный, ещё не сделанный шаг, не этот промпт.
+// Срез Д, Промпт 3/5: добавлен класс v2-accent-c2 — без него заголовки .module-heading
+// красились бы в акцент папки «Самочувствие» (ProgressScreen.tsx тоже получил v2-screen
+// в этом промпте, а правило было общим на .v2-screen — конфликт исправлен разбивкой на
+// per-папку акцентные классы, см. index.css).
 import { useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import BottomNav from '../components/BottomNav';
@@ -62,7 +66,7 @@ export default function TechniquesScreen() {
   }, []);
 
   return (
-    <main className="screen v2-screen">
+    <main className="screen v2-screen v2-accent-c2">
       <p className="eyebrow">SanaWell</p>
       <h1>Все техники самопомощи</h1>
 

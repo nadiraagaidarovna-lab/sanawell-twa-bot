@@ -742,8 +742,8 @@ h1 {
 /* Срез Д, Промпт 2/5 (ТЗ 4.4.1) — TechniquesScreen.tsx на пудровой v2-теме (папка «Мой план
    поддержки»). Переопределение только под .v2-screen — сами правила .protocol-card/
    .module-heading/... не трогаем, т.к. они же используются в ProgressScreen.tsx, который
-   остаётся на системной теме Telegram до Промпта 3/5. --v2-c2 (шалфейный) — акцент именно
-   этой папки, чтобы цвет экрана продолжал цвет папки, из которой пришёл пользователь. */
+   получил v2-screen позже, в Промпте 3/5. --v2-c2 (шалфейный) — акцент именно этой папки,
+   чтобы цвет экрана продолжал цвет папки, из которой пришёл пользователь. */
 .v2-screen .protocol-card {
   background: var(--v2-surface);
   border: 1px solid var(--v2-border);
@@ -756,6 +756,51 @@ h1 {
 .v2-screen .protocol-note {
   color: var(--v2-ink-soft);
 }
-.v2-screen .module-heading {
+
+/* Срез Д, Промпт 3/5 — .module-heading используется и в TechniquesScreen.tsx (папка «Мой
+   план поддержки», шалфейный), и в ProgressScreen.tsx (папка «Самочувствие», дымчатая
+   слива) — когда оба экрана получили общий .v2-screen, общее правило `.v2-screen
+   .module-heading` красило бы оба в один и тот же акцент. Разбито на per-папку классы
+   (v2-accent-c2/v2-accent-c6), которые экраны добавляют себе вторым классом рядом с
+   v2-screen — .v2-screen продолжает отвечать только за общий пудровый фон/цвет текста. */
+.v2-accent-c2 .module-heading {
   color: var(--v2-c2);
+}
+.v2-accent-c6 .module-heading {
+  color: var(--v2-c6);
+}
+
+/* Срез Д, Промпт 3/5 — ProgressScreen.tsx на пудровой v2-теме (папка «Самочувствие»).
+   Переопределение только под .v2-screen — .weekly-chart, .history-row и .doctor-nudge не
+   изменены напрямую, других потребителей у них сейчас нет, но паттерн тот же, что и в
+   Промпте 2/5 (не трогать общие классы напрямую). --v2-c6 (дымчатая слива) — акцент
+   именно этой папки. */
+.v2-screen .weekly-chart {
+  background: var(--v2-surface);
+}
+.v2-screen .weekly-chart-labels {
+  color: var(--v2-ink-soft);
+}
+.v2-screen .weekly-chart-legend-item {
+  color: var(--v2-ink);
+}
+.v2-screen .history-row {
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+}
+.v2-screen .history-scores {
+  color: var(--v2-ink);
+}
+.v2-screen .history-comment {
+  color: var(--v2-ink-soft);
+}
+.v2-screen .doctor-nudge {
+  background: var(--v2-surface-2);
+  border-left-color: var(--v2-wine-soft);
+}
+.v2-accent-c6 .history-date {
+  color: var(--v2-c6);
+}
+.v2-accent-c6 .protocol-reason {
+  color: var(--v2-c6);
 }

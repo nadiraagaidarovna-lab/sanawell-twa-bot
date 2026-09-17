@@ -3,10 +3,16 @@
 // /api/checkin/history: график недели + подобранные по паттерну техники + приглашение
 // к врачу (данные для двух последних — отдельный эндпоинт /api/checkin/weekly-report,
 // см. Срез Е1, — намеренно не дублирует дневные оценки, которые уже есть в history).
+// Срез Д, Промпт 3/5 (ТЗ 4.4.1): это экран, на который ведёт папка «Самочувствие» —
+// переведён на пудровую v2-тему (v2-screen + v2-accent-c6) + нижняя навигация, заголовок
+// стал "Самочувствие" (только текст — ID экрана 'progress' и имя файла не менялись). Ни
+// GET /api/checkin/history, ни GET /api/checkin/weekly-report, ни логика подбора техник
+// не менялись.
 import { useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import { useNavigation } from '../lib/useNavigation';
 import WeeklyChart, { type WeeklyChartEntry } from '../components/WeeklyChart';
+import BottomNav from '../components/BottomNav';
 
 interface HistoryEntry {
   date: string;
@@ -99,18 +105,18 @@ export default function ProgressScreen() {
   const weekEntries: WeeklyChartEntry[] = history.slice(-7);
 
   return (
-    <main className="screen">
+    <main className="screen v2-screen v2-accent-c6">
       <p className="eyebrow">SanaWell</p>
-      <h1>Мой путь</h1>
+      <h1>Самочувствие</h1>
 
       {view === 'loading' && (
-        <p className="body-text" style={{ color: 'var(--hint)' }}>
+        <p className="body-text" style={{ color: 'var(--v2-ink-soft)' }}>
           Загружаю…
         </p>
       )}
 
       {view === 'error' && (
-        <p className="body-text" style={{ color: 'var(--sw-terracotta)' }}>
+        <p className="body-text" style={{ color: 'var(--v2-terracotta)' }}>
           Не удалось загрузить: {error}
         </p>
       )}
@@ -152,7 +158,7 @@ export default function ProgressScreen() {
           <p className="module-heading">Все записи за 14 дней</p>
 
           {history.length === 0 && (
-            <p className="body-text" style={{ color: 'var(--hint)' }}>
+            <p className="body-text" style={{ color: 'var(--v2-ink-soft)' }}>
               Пока нет ни одной записи за этот период — отметки появятся здесь после первого чек-ина.
             </p>
           )}
@@ -176,6 +182,8 @@ export default function ProgressScreen() {
           )}
         </>
       )}
+
+      <BottomNav active="progress" />
     </main>
   );
 }
