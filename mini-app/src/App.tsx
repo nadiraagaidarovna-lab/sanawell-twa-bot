@@ -24,6 +24,10 @@ import CheckinScreen from './screens/CheckinScreen';
 import ProgressScreen from './screens/ProgressScreen';
 import TechniquesScreen from './screens/TechniquesScreen';
 import PartnersScreen from './screens/PartnersScreen';
+import GuideScreen from './screens/GuideScreen';
+import BodyScreen from './screens/BodyScreen';
+import AiAssistantScreen from './screens/AiAssistantScreen';
+import CabinetScreen from './screens/CabinetScreen';
 import AnketaNameScreen from './screens/anketa/AnketaNameScreen';
 import AnketaAgeScreen from './screens/anketa/AnketaAgeScreen';
 import AnketaStageScreen from './screens/anketa/AnketaStageScreen';
@@ -178,6 +182,14 @@ function Screens({
       return <TechniquesScreen />;
     case 'partners':
       return <PartnersScreen />;
+    case 'guide':
+      return <GuideScreen />;
+    case 'body':
+      return <BodyScreen />;
+    case 'ai-assistant':
+      return <AiAssistantScreen />;
+    case 'cabinet':
+      return <CabinetScreen />;
     case 'home':
       return <HomeScreen />;
     case 'welcome':

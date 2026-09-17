@@ -3,7 +3,9 @@ import { createContext } from 'react';
 // Срез О2, Промпт 3/4: 7 экранов анкеты (ТЗ v2.13, 6.2.2) между 'welcome' (Шаг 0, Срез О3)
 // и 'home' — код самих экранов не в этом файле (см. screens/anketa/), здесь только ID
 // для стека навигации, тот же паттерн, что у остальных ScreenId. Срез О5, Промпт 2/2:
-// 'consent' — экран согласий (ТЗ раздел 13) между 'welcome' и анкетой.
+// 'consent' — экран согласий (ТЗ раздел 13) между 'welcome' и анкетой. Срез Д, Промпт 1/5
+// (ТЗ 4.4.1): 'guide'/'body'/'ai-assistant'/'cabinet' — новые пункты сетки папок/нижней
+// навигации главного экрана v2.
 export type ScreenId =
   | 'welcome'
   | 'consent'
@@ -18,7 +20,11 @@ export type ScreenId =
   | 'checkin'
   | 'progress'
   | 'techniques'
-  | 'partners';
+  | 'partners'
+  | 'guide'
+  | 'body'
+  | 'ai-assistant'
+  | 'cabinet';
 
 export interface NavigationContextValue {
   screen: ScreenId;

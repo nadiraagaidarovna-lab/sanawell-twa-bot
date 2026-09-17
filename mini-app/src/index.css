@@ -540,3 +540,201 @@ h1 {
   color: var(--sw-terracotta);
   text-decoration: underline;
 }
+
+/* ===== Главный экран v2 — сетка папок + нижняя навигация (Срез Д, Промпт 1/5, ТЗ 4.4.1) =====
+   Единственное и явное исключение из раздела 4.2 (системная тема Telegram) — собственный
+   фирменный пудровый фон, только на HomeScreen/GuideScreen/BodyScreen/AiAssistantScreen/
+   CabinetScreen (класс .v2-screen). Токены — префикс --v2-, чтобы не конфликтовать с уже
+   существующими --bg/--text/... (те привязаны к --tg-theme-* и остаются как есть на
+   checkin/progress/techniques/partners/анкете/согласиях/приветствии). Значения — 1:1 из
+   утверждённого Надирой докa/design/main-screen-reference.html (:root и
+   @media (prefers-color-scheme: dark)), просто переименованы. */
+:root {
+  --v2-bg: #f5e1d9;
+  --v2-surface: #fffcfa;
+  --v2-surface-2: #efd5cb;
+  --v2-wine: #5e2a34;
+  --v2-wine-soft: #8c4a55;
+  --v2-terracotta: #c1613f;
+  --v2-gold: #b98b4e;
+  --v2-ink: #2b1b1e;
+  --v2-ink-soft: #6e5751;
+  --v2-border: rgba(94, 42, 52, 0.14);
+  --v2-good: #7c8b6f;
+
+  --v2-c1: #c1613f;
+  --v2-c1-bg: rgba(193, 97, 63, 0.15);
+  --v2-c2: #7c8b6f;
+  --v2-c2-bg: rgba(124, 139, 111, 0.17);
+  --v2-c3: #c98f86;
+  --v2-c3-bg: rgba(201, 143, 134, 0.19);
+  --v2-c4: #8c4a55;
+  --v2-c4-bg: rgba(140, 74, 85, 0.14);
+  --v2-c5: #b98b4e;
+  --v2-c5-bg: rgba(185, 139, 78, 0.18);
+  --v2-c6: #9b7a99;
+  --v2-c6-bg: rgba(155, 122, 153, 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --v2-bg: #251519;
+    --v2-surface: #2e1a20;
+    --v2-surface-2: #3c232a;
+    --v2-wine: #e7b8a6;
+    --v2-wine-soft: #d99a8c;
+    --v2-terracotta: #e2895f;
+    --v2-gold: #d9ad6e;
+    --v2-ink: #f5e9de;
+    --v2-ink-soft: #cbb0a8;
+    --v2-border: rgba(245, 233, 222, 0.16);
+    --v2-good: #a9bc9b;
+
+    --v2-c1: #e2895f;
+    --v2-c1-bg: rgba(226, 137, 95, 0.22);
+    --v2-c2: #a9bc9b;
+    --v2-c2-bg: rgba(169, 188, 155, 0.22);
+    --v2-c3: #e3ada3;
+    --v2-c3-bg: rgba(227, 173, 163, 0.22);
+    --v2-c4: #d99a8c;
+    --v2-c4-bg: rgba(217, 154, 140, 0.2);
+    --v2-c5: #d9ad6e;
+    --v2-c5-bg: rgba(217, 173, 110, 0.22);
+    --v2-c6: #c6a0c4;
+    --v2-c6-bg: rgba(198, 160, 196, 0.2);
+  }
+}
+
+.v2-screen {
+  background: var(--v2-bg);
+  color: var(--v2-ink);
+  min-height: 100vh;
+  /* Клиренс снизу под фиксированную .bottom-nav — только эти 5 экранов её рендерят. */
+  padding-bottom: 100px;
+}
+
+.folder-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 11px;
+  margin-top: 20px;
+}
+
+.folder-card {
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: 16px;
+  padding: 10px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 104px;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.folder-icon {
+  width: 100%;
+  max-width: 96px;
+  margin: 0 auto;
+  aspect-ratio: 120 / 100;
+  display: block;
+}
+
+.folder-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.folder-card.c1 {
+  --accent: var(--v2-c1);
+  --accent-bg: var(--v2-c1-bg);
+}
+.folder-card.c2 {
+  --accent: var(--v2-c2);
+  --accent-bg: var(--v2-c2-bg);
+}
+.folder-card.c3 {
+  --accent: var(--v2-c3);
+  --accent-bg: var(--v2-c3-bg);
+}
+.folder-card.c4 {
+  --accent: var(--v2-c4);
+  --accent-bg: var(--v2-c4-bg);
+}
+.folder-card.c5 {
+  --accent: var(--v2-c5);
+  --accent-bg: var(--v2-c5-bg);
+}
+.folder-card.c6 {
+  --accent: var(--v2-c6);
+  --accent-bg: var(--v2-c6-bg);
+}
+
+.folder-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--v2-ink);
+  line-height: 1.25;
+  text-align: center;
+}
+
+.folder-sub {
+  font-size: 10.5px;
+  color: var(--v2-ink-soft);
+  line-height: 1.35;
+  text-align: center;
+}
+
+/* position:fixed вместо position:absolute референс-файла — там был мокап внутри
+   условного "телефона", в реальном приложении навигация закреплена снизу вьюпорта. */
+.bottom-nav {
+  position: fixed;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: 20px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 10px 6px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 10px 24px -16px rgba(43, 27, 30, 0.4);
+  z-index: 10;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--v2-ink-soft);
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.nav-item.active {
+  color: var(--v2-terracotta);
+}
+
+.nav-label {
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.nav-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
+}
