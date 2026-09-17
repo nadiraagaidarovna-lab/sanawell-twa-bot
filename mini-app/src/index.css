@@ -738,3 +738,24 @@ h1 {
   object-fit: contain;
   display: block;
 }
+
+/* Срез Д, Промпт 2/5 (ТЗ 4.4.1) — TechniquesScreen.tsx на пудровой v2-теме (папка «Мой план
+   поддержки»). Переопределение только под .v2-screen — сами правила .protocol-card/
+   .module-heading/... не трогаем, т.к. они же используются в ProgressScreen.tsx, который
+   остаётся на системной теме Telegram до Промпта 3/5. --v2-c2 (шалфейный) — акцент именно
+   этой папки, чтобы цвет экрана продолжал цвет папки, из которой пришёл пользователь. */
+.v2-screen .protocol-card {
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+}
+.v2-screen .protocol-title,
+.v2-screen .protocol-steps {
+  color: var(--v2-ink);
+}
+.v2-screen .protocol-duration,
+.v2-screen .protocol-note {
+  color: var(--v2-ink-soft);
+}
+.v2-screen .module-heading {
+  color: var(--v2-c2);
+}

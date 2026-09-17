@@ -4,8 +4,15 @@
 // (раздел 5.4 ТЗ, тексты утверждены Надирой) вместо однострочного note.
 // Срез Т добавил модули 'nutrition'/'strength' (питание, силовые/весонесущие нагрузки) —
 // самостоятельные направления библиотеки, не привязанные к измерениям чек-ина.
+// Срез Д, Промпт 2/5 (ТЗ 4.4.1): это экран, на который ведёт папка «Мой план поддержки» —
+// переведён на пудровую v2-тему (класс v2-screen) + нижняя навигация, ни контент, ни
+// GET /api/protocols, ни MODULE_LABELS/MODULE_ORDER не менялись. Перегруппировка этих
+// 5 модулей в 5 направлений wellness-плана по разделу 4.4.1 (Когнитивное здоровье/
+// Нейропластичность/Физическая нагрузка/Питание и нутрициология/Психологическое
+// благополучие) — отдельный, ещё не сделанный шаг, не этот промпт.
 import { useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
+import BottomNav from '../components/BottomNav';
 
 interface Protocol {
   id: string;
@@ -55,18 +62,18 @@ export default function TechniquesScreen() {
   }, []);
 
   return (
-    <main className="screen">
+    <main className="screen v2-screen">
       <p className="eyebrow">SanaWell</p>
       <h1>Все техники самопомощи</h1>
 
       {view === 'loading' && (
-        <p className="body-text" style={{ color: 'var(--hint)' }}>
+        <p className="body-text" style={{ color: 'var(--v2-ink-soft)' }}>
           Загружаю…
         </p>
       )}
 
       {view === 'error' && (
-        <p className="body-text" style={{ color: 'var(--sw-terracotta)' }}>
+        <p className="body-text" style={{ color: 'var(--v2-terracotta)' }}>
           Не удалось загрузить: {error}
         </p>
       )}
@@ -93,6 +100,8 @@ export default function TechniquesScreen() {
             </div>
           </section>
         ))}
+
+      <BottomNav active="techniques" />
     </main>
   );
 }
