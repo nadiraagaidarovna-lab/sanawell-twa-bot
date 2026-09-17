@@ -509,28 +509,6 @@ h1 {
   font-weight: 600;
 }
 
-.anketa-teaser {
-  background: var(--secondary-bg);
-  border-left: 3px solid var(--sw-gold);
-  border-radius: var(--card-radius);
-  padding: 14px 16px;
-  margin: 4px 0 20px;
-}
-
-.anketa-teaser-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--sw-wine);
-  margin: 0 0 6px;
-}
-
-.anketa-teaser-body {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text);
-  margin: 0;
-}
-
 .anketa-lifestyle-block {
   margin-bottom: 22px;
 }
