@@ -136,7 +136,7 @@ export default function HomeScreen() {
             </svg>
           </div>
           <div className="folder-title">Тело</div>
-          <div className="folder-sub">интимное здоровье и гигиена</div>
+          <div className="folder-sub">упражнения и физическая активность</div>
         </button>
 
         <button type="button" className="folder-card c5" onClick={() => push('partners')}>
