@@ -28,6 +28,8 @@ import GuideScreen from './screens/GuideScreen';
 import BodyScreen from './screens/BodyScreen';
 import AiAssistantScreen from './screens/AiAssistantScreen';
 import CabinetScreen from './screens/CabinetScreen';
+import ProfileEditScreen from './screens/ProfileEditScreen';
+import TariffScreen from './screens/TariffScreen';
 import AnketaNameScreen from './screens/anketa/AnketaNameScreen';
 import AnketaAgeScreen from './screens/anketa/AnketaAgeScreen';
 import AnketaStageScreen from './screens/anketa/AnketaStageScreen';
@@ -190,6 +192,10 @@ function Screens({
       return <AiAssistantScreen />;
     case 'cabinet':
       return <CabinetScreen />;
+    case 'profile-edit':
+      return <ProfileEditScreen />;
+    case 'tariff':
+      return <TariffScreen />;
     case 'home':
       return <HomeScreen />;
     case 'welcome':

@@ -24,7 +24,10 @@ export type ScreenId =
   | 'guide'
   | 'body'
   | 'ai-assistant'
-  | 'cabinet';
+  | 'cabinet'
+  // Срез Д, Промпт 5/5 (часть 2): подэкраны «Личного кабинета».
+  | 'profile-edit'
+  | 'tariff';
 
 export interface NavigationContextValue {
   screen: ScreenId;

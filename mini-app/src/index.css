@@ -929,3 +929,130 @@ details[open] > .faq-question::after {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Срез Д, Промпт 5/5 (часть 2) — «Личный кабинет» (CabinetScreen/ProfileEditScreen/
+   TariffScreen). У кабинета нет своей папки в сетке, поэтому акцент — терракотовый
+   --v2-terracotta (тот же, что у активного пункта нижней навигации). Общие классы
+   .lang-toggle/.reminder-toggle-row в кабинете красились цветами темы Telegram (--hint/
+   --text), на пудровом фоне это читалось бы плохо — переопределяем только под
+   .v2-accent-cabinet, сами классы не трогаем. */
+.v2-accent-cabinet {
+  --cabinet-accent: var(--v2-terracotta);
+}
+
+.cabinet-card {
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.cabinet-heading {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v2-ink-soft);
+}
+
+.cabinet-name {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--v2-ink);
+}
+
+.cabinet-line {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--v2-ink);
+}
+
+.cabinet-note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--v2-ink-soft);
+}
+
+.cabinet-btn,
+.cabinet-btn-danger {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cabinet-btn {
+  border: 1.5px solid var(--cabinet-accent);
+  color: var(--cabinet-accent);
+}
+.cabinet-btn-danger {
+  border: 1.5px solid var(--v2-wine-soft);
+  color: var(--v2-wine-soft);
+}
+.cabinet-btn:disabled,
+.cabinet-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cabinet-confirm-row {
+  display: flex;
+  gap: 10px;
+}
+
+.cabinet-link {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--cabinet-accent);
+  text-decoration: underline;
+}
+
+.cabinet-label {
+  display: block;
+  margin: 14px 0 6px;
+  font-size: 13px;
+  color: var(--v2-ink-soft);
+}
+
+.cabinet-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--v2-border);
+  background: var(--v2-surface);
+  color: var(--v2-ink);
+  font: inherit;
+  font-size: 15px;
+}
+.cabinet-input:disabled {
+  opacity: 0.6;
+}
+
+.cabinet-error {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--v2-terracotta);
+}
+
+.v2-accent-cabinet .reminder-toggle-row {
+  color: var(--v2-ink);
+}
+.v2-accent-cabinet .lang-toggle button {
+  color: var(--v2-ink-soft);
+}
+.v2-accent-cabinet .lang-toggle button.active {
+  background: var(--v2-surface-2);
+  color: var(--cabinet-accent);
+}

@@ -1,5 +1,8 @@
 // db.js — минималистичное анонимное хранилище, теперь на Postgres (Neon, free-тир).
-// Никаких имён, телефонов, e-mail — только telegram_id как единственный идентификатор.
+// Изначально — никаких имён, телефонов, e-mail, только telegram_id как единственный
+// идентификатор. Это уже не так: анкета (Срез О2) добавила display_name, «Личный кабинет»
+// (Срез Д, Промпт 5/5, часть 2) — необязательные age/email/phone; всё под согласием
+// «обработка персональных данных и данных о здоровье» (раздел 13 ТЗ).
 //
 // Срочный стопгеп (09.09.2026, ТЗ v2.9): раньше был node:sqlite на локальном файле —
 // но на бесплатном тарифе Render файловая система эфемерна и стирается на каждом деплое
@@ -116,6 +119,16 @@ async function initSchema() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS goal TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS symptom_checklist JSONB;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_anketa_completed BOOLEAN NOT NULL DEFAULT false;
+    -- Срез Д, Промпт 5/5 (часть 2) — «Личный кабинет» MVP (docs/personal-cabinet-v1.md).
+    -- age — свободное числовое поле (не age_range выше: тот остаётся для анкеты, пока срез
+    -- онбординга с исправлением возрастных категорий не сделан). email/phone — необязательные
+    -- контакты профиля, без верификации. deleted_at — soft-delete аккаунта (пометка запроса
+    -- на удаление, строка физически не стирается), тот же формат даты, что у остальных TEXT.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS age INTEGER
+      CHECK (age BETWEEN 18 AND 100 OR age IS NULL);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TEXT;
 
     -- Один лог = одна отметка по одному из трёх модулей старого трекера (module: 'sleep'
     -- | 'mood' | 'cognitive'). Осиротела после Среза В (маршрут / упразднён); роуты и
@@ -343,6 +356,35 @@ async function setOnboardingAnketaCompleted(telegramId) {
   ]);
 }
 
+// Срез Д, Промпт 5/5 (часть 2) — профиль из «Личного кабинета»: форма редактирования шлёт
+// все четыре поля сразу, поэтому это полная замена значений (null/пустая строка очищает
+// поле), а не частичный merge. Валидация формата — в routes.js, здесь только нормализация.
+async function updateProfile(telegramId, { displayName, age, email, phone }) {
+  await touchOrCreateUser(telegramId);
+  const name = typeof displayName === 'string' ? displayName.trim().slice(0, 100) || null : null;
+  const emailValue = typeof email === 'string' ? email.trim().slice(0, 254) || null : null;
+  const phoneValue = typeof phone === 'string' ? phone.trim().slice(0, 32) || null : null;
+  const ageValue = Number.isInteger(age) ? age : null;
+
+  await pool.query(
+    'UPDATE users SET display_name = $1, age = $2, email = $3, phone = $4 WHERE telegram_id = $5',
+    [name, ageValue, emailValue, phoneValue, String(telegramId)]
+  );
+}
+
+// Soft-delete аккаунта: ставим метку и сразу гасим оба напоминания, чтобы бот не писал
+// тому, кто запросил удаление. Сами данные (чек-ины и т.д.) не стираются физически —
+// окончательная обработка запроса — отдельный будущий процесс, не часть этого среза.
+async function softDeleteAccount(telegramId) {
+  await touchOrCreateUser(telegramId);
+  await pool.query(
+    `UPDATE users
+     SET deleted_at = COALESCE(deleted_at, $1), reminder_opt_in = 0, habits_reminder_opt_in = 0
+     WHERE telegram_id = $2`,
+    [nowUtcString(), String(telegramId)]
+  );
+}
+
 // Каждое согласие — отдельное поле, отзываемое по отдельности (раздел 13 ТЗ), а не один
 // общий флаг на всё сразу (тот был у старого upsertUserConsent, убран Срезом О1). consented
 // true -> проставляем текущую отметку времени; false (для будущего экрана отзыва, ещё не
@@ -433,6 +475,18 @@ async function getCheckinHistory(telegramId, days = 14) {
   return rows;
 }
 
+// «Мой прогресс» в «Личном кабинете» (Срез Д, Промпт 5/5, часть 2): число уникальных дней с
+// записью и дата последней — за всё время, не за окно getCheckinHistory (14 дней).
+async function getCheckinSummary(telegramId) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(DISTINCT checkin_date)::int AS days_count, MAX(checkin_date) AS last_checkin_date
+     FROM daily_checkins
+     WHERE telegram_id = $1`,
+    [String(telegramId)]
+  );
+  return { daysCount: rows[0].days_count, lastCheckinDate: rows[0].last_checkin_date };
+}
+
 async function insertSafetyEvent(telegramId, triggerType) {
   await pool.query('INSERT INTO safety_events (telegram_id, trigger_type) VALUES ($1, $2)', [
     String(telegramId),
@@ -445,6 +499,7 @@ async function getUsersDueForReminder(todayAlmaty) {
   const { rows } = await pool.query(
     `SELECT telegram_id, language FROM users
      WHERE reminder_opt_in = 1
+       AND deleted_at IS NULL
        AND (last_reminder_sent_date IS NULL OR last_reminder_sent_date != $1)`,
     [todayAlmaty]
   );
@@ -470,6 +525,7 @@ async function getUsersDueForHabitsReminder(intervalDays) {
   const { rows } = await pool.query(
     `SELECT telegram_id, language FROM users
      WHERE habits_reminder_opt_in = 1
+       AND deleted_at IS NULL
        AND (last_habits_reminder_sent_date IS NULL OR last_habits_reminder_sent_date <= $1)`,
     [cutoffDate]
   );
@@ -521,6 +577,9 @@ module.exports = {
   setLifestyle,
   setSymptomChecklist,
   setOnboardingAnketaCompleted,
+  updateProfile,
+  softDeleteAccount,
+  getCheckinSummary,
   touchOrCreateUser,
   upsertDailyCheckin,
   getTodayCheckin,

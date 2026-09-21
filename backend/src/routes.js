@@ -73,7 +73,66 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         goal: user ? user.goal : null,
         symptomChecklist: user ? user.symptom_checklist : null,
         onboardingAnketaCompleted: !!(user && user.onboarding_anketa_completed),
+        // Срез Д, Промпт 5/5 (часть 2) — «Личный кабинет»: профиль и статус запроса на
+        // удаление. Тарифа здесь нет намеренно — колонки в БД нет, экран хардкодит Basic.
+        age: user ? user.age : null,
+        email: user ? user.email : null,
+        phone: user ? user.phone : null,
+        accountDeleted: !!(user && user.deleted_at),
       });
+    })
+  );
+
+  // Срез Д, Промпт 5/5 (часть 2): профиль из «Личного кабинета». Форма шлёт все 4 поля
+  // сразу — полная замена, null/пустая строка очищает поле. Все поля необязательны.
+  // Формат проверяем мягко (не блокируем экзотические, но реальные адреса/номера).
+  router.post(
+    '/profile',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { displayName, age, email, phone } = req.body || {};
+
+      const isOptionalString = (v) => v === undefined || v === null || typeof v === 'string';
+      if (![displayName, email, phone].every(isOptionalString)) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+
+      if (age !== undefined && age !== null && (!Number.isInteger(age) || age < 18 || age > 100)) {
+        return res.status(400).json({ error: 'invalid_age' });
+      }
+
+      const emailTrimmed = typeof email === 'string' ? email.trim() : '';
+      if (emailTrimmed && (emailTrimmed.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed))) {
+        return res.status(400).json({ error: 'invalid_email' });
+      }
+
+      const phoneTrimmed = typeof phone === 'string' ? phone.trim() : '';
+      if (phoneTrimmed) {
+        const digits = phoneTrimmed.replace(/\D/g, '');
+        const shapeOk = /^\+?[\d\s\-()]+$/.test(phoneTrimmed);
+        if (!shapeOk || digits.length < 7 || digits.length > 15) {
+          return res.status(400).json({ error: 'invalid_phone' });
+        }
+      }
+
+      await db.updateProfile(req.telegramId, {
+        displayName,
+        age: age ?? null,
+        email: emailTrimmed,
+        phone: phoneTrimmed,
+      });
+      res.json({ ok: true });
+    })
+  );
+
+  // Срез Д, Промпт 5/5 (часть 2): запрос на удаление аккаунта — soft-delete (метка
+  // deleted_at + отключение напоминаний), данные физически не стираются. Идемпотентен.
+  router.post(
+    '/account/delete-request',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await db.softDeleteAccount(req.telegramId);
+      res.json({ ok: true });
     })
   );
 
@@ -339,6 +398,16 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
           comment: row.comment,
         })),
       });
+    })
+  );
+
+  // Срез Д, Промпт 5/5 (часть 2): блок «Мой прогресс» в «Личном кабинете» — сколько
+  // уникальных дней с записью за всё время и дата последней (не 14-дневное окно истории).
+  router.get(
+    '/checkin/summary',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      res.json(await db.getCheckinSummary(req.telegramId));
     })
   );
 
