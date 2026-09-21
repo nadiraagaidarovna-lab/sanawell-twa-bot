@@ -19,6 +19,8 @@ import WeeklyChart, { type WeeklyChartEntry } from '../components/WeeklyChart';
 import BottomNav from '../components/BottomNav';
 import { getTheme0Cards, type GuideCard } from '../content/guide';
 import { setGuideTarget } from '../lib/guideTarget';
+import { setBodyTarget } from '../lib/bodyTarget';
+import { pickBodyExercise } from '../lib/bodyPointer';
 
 interface HistoryEntry {
   date: string;
@@ -158,6 +160,12 @@ export default function ProgressScreen() {
 
   const weekEntries: WeeklyChartEntry[] = history.slice(-7);
 
+  // Указатель на упражнение из «Тела» (упражнение недели, lib/bodyPointer.ts) — компактная
+  // строка-ссылка ниже карточек отчёта. Не входит в MAX_RECOMMENDATIONS бэкенда и не зависит
+  // от числа просевших измерений; на пустой неделе (ни одной отметки) не показывается — та же
+  // логика, что у ротации Питание/Силовые в weeklyReport.js.
+  const bodyPick = history.length > 0 ? pickBodyExercise() : null;
+
   const caption = me ? chartCaption(me.symptomChecklist) : null;
 
   // Карточка Гида, к которой привязан тег просевшего измерения: сейчас это «Мозг» для Головы
@@ -237,6 +245,21 @@ export default function ProgressScreen() {
               <p style={{ margin: '0 0 10px' }}>{report.doctorNudge.text}</p>
               <button type="button" className="btn-secondary" onClick={() => push('partners')}>
                 Запись к врачу
+              </button>
+            </div>
+          )}
+
+          {bodyPick && (
+            <div className="progress-body-link">
+              <button
+                type="button"
+                className="protocol-guide-link"
+                onClick={() => {
+                  setBodyTarget(bodyPick);
+                  push('body');
+                }}
+              >
+                Загляните в «Тело»: {bodyPick.itemTitle}
               </button>
             </div>
           )}

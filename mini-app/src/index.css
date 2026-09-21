@@ -837,6 +837,14 @@ h1 {
   line-height: 1.45;
   color: var(--v2-ink-soft);
 }
+/* Ссылка «Загляните в «Тело»: …» под карточками отчёта — тот же визуальный приём, что у
+   «И почитайте в Гиде: …», только вне карточки (свой отступ обёртки вместо внутреннего). */
+.v2-accent-c6 .progress-body-link {
+  margin: 4px 0 20px;
+}
+.v2-accent-c6 .progress-body-link .protocol-guide-link {
+  margin: 0;
+}
 .v2-accent-c6 .protocol-guide-link {
   display: block;
   margin: 10px 0 0;
