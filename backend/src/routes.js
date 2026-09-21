@@ -136,6 +136,17 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     })
   );
 
+  // Отмена запроса на удаление (кнопка «Отменить запрос» в кабинете): снимает deleted_at.
+  // Напоминания не включаются обратно — только явным переключателем женщины. Идемпотентна.
+  router.post(
+    '/account/cancel-deletion',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await db.cancelAccountDeletion(req.telegramId);
+      res.json({ ok: true });
+    })
+  );
+
   // Выбор языка (можно вызывать и до согласий — экран языка идёт до них, ТЗ 6.2 шаг 3;
   // также остаётся доступным в любой момент после онбординга, см. HomeScreen.tsx).
   router.post(

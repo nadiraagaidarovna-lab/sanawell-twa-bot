@@ -49,6 +49,9 @@ export default function CabinetScreen() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [deleteStep, setDeleteStep] = useState<DeleteStep>('idle');
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Отмена запроса на удаление (кнопка в состоянии 'done') — отдельный флаг, чтобы не менять
+  // deleteStep, пока запрос в пути, и не дать нажать дважды.
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,6 +127,27 @@ export default function CabinetScreen() {
       setDeleteError('Не удалось отправить запрос. Попробуйте ещё раз чуть позже.');
       setDeleteStep('confirm');
     }
+  };
+
+  const handleCancelDeletion = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    setDeleteError(null);
+    try {
+      await apiFetch('/account/cancel-deletion', { method: 'POST' });
+      // Блок удаления возвращается в исходное состояние, локальный me — тоже, чтобы не
+      // перезагружать экран. Напоминания остаются выключенными (бэкенд их не включает):
+      // переключатели уже показывают false после запроса на удаление и не меняются.
+      setAuthStatus((prev) =>
+        prev.state === 'ok' ? { state: 'ok', me: { ...prev.me, accountDeleted: false } } : prev
+      );
+      setDeleteStep('idle');
+    } catch {
+      // Успех не имитируем: если отмена не дошла, женщина должна это знать; шаг не меняем —
+      // запрос на удаление по-прежнему принят.
+      setDeleteError('Не удалось отменить запрос. Попробуйте ещё раз чуть позже.');
+    }
+    setCancelling(false);
   };
 
   const me = authStatus.state === 'ok' ? authStatus.me : null;
@@ -317,6 +341,15 @@ export default function CabinetScreen() {
                 <p className="cabinet-note">
                   Мы отключили напоминания и обработаем запрос. Спасибо, что были с SanaWell.
                 </p>
+                {deleteError && <p className="cabinet-error">{deleteError}</p>}
+                <button
+                  type="button"
+                  className="cabinet-btn"
+                  disabled={cancelling}
+                  onClick={handleCancelDeletion}
+                >
+                  {cancelling ? 'Отменяю…' : 'Отменить запрос'}
+                </button>
                 <button type="button" className="cabinet-btn" onClick={() => push('home')}>
                   На главный экран
                 </button>

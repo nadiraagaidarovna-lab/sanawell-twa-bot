@@ -398,6 +398,15 @@ async function softDeleteAccount(telegramId) {
   );
 }
 
+// Обратный путь к softDeleteAccount: снимает метку запроса на удаление. Напоминания
+// (reminder_opt_in/habits_reminder_opt_in) сознательно НЕ включаем обратно — softDeleteAccount
+// их выключил, а включать уведомления без явного нового согласия женщины противоречит
+// принципу «напоминания только opt-in»; захочет — включит сама переключателями в кабинете.
+// Без touchOrCreateUser: отменять нечего, если пользователя нет. Идемпотентна.
+async function cancelAccountDeletion(telegramId) {
+  await pool.query('UPDATE users SET deleted_at = NULL WHERE telegram_id = $1', [String(telegramId)]);
+}
+
 // Каждое согласие — отдельное поле, отзываемое по отдельности (раздел 13 ТЗ), а не один
 // общий флаг на всё сразу (тот был у старого upsertUserConsent, убран Срезом О1). consented
 // true -> проставляем текущую отметку времени; false (для будущего экрана отзыва, ещё не
@@ -593,6 +602,7 @@ module.exports = {
   setOnboardingAnketaCompleted,
   updateProfile,
   softDeleteAccount,
+  cancelAccountDeletion,
   getCheckinSummary,
   touchOrCreateUser,
   upsertDailyCheckin,
