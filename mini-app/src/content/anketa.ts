@@ -28,35 +28,24 @@ export const STEP1_NAME = {
   },
 } as const;
 
-// ---- Шаг 2 — Возраст ---- (значения — AGE_RANGES в backend/src/db.js)
-export const STEP2_AGE: Record<Lang, { question: string; hint: string; options: AnketaOption[] }> = {
+// ---- Шаг 2 — Возраст ---- свободное числовое поле 18–100 (users.age, POST /api/anketa/age);
+// раньше были категории 35–39…60+ (AGE_RANGES/age_range в backend/src/db.js — пока оставлены
+// в бэкенде, но экраном больше не используются). Пустое поле = шаг пропущен. Тексты error и
+// placeholder добавлены Claude Code, казахский — черновик (проверка носителем языка).
+export const STEP2_AGE = {
   ru: {
     question: 'Сколько вам лет?',
     hint: 'Это поможет предлагать техники и советы, которые подходят именно вашему возрасту.',
-    options: [
-      { value: '35_39', label: '35–39' },
-      { value: '40_44', label: '40–44' },
-      { value: '45_49', label: '45–49' },
-      { value: '50_54', label: '50–54' },
-      { value: '55_59', label: '55–59' },
-      { value: '60_plus', label: '60 и старше' },
-      { value: 'prefer_not_to_say', label: 'Предпочитаю не отвечать' },
-    ],
+    placeholder: 'Ваш возраст',
+    error: 'Укажите возраст от 18 до 100',
   },
   kk: {
     question: 'Сізге неше жас?',
     hint: 'Бұл сізге дәл сіздің жасыңызға сай тәсілдер мен кеңестер ұсынуға көмектеседі.',
-    options: [
-      { value: '35_39', label: '35–39' },
-      { value: '40_44', label: '40–44' },
-      { value: '45_49', label: '45–49' },
-      { value: '50_54', label: '50–54' },
-      { value: '55_59', label: '55–59' },
-      { value: '60_plus', label: '60 және одан жоғары' },
-      { value: 'prefer_not_to_say', label: 'Айтқым келмейді' },
-    ],
+    placeholder: 'Жасыңыз',
+    error: 'Жасыңызды 18-ден 100-ге дейін көрсетіңіз',
   },
-};
+} as const;
 
 // ---- Шаг 3 — Самоощущаемый этап ---- (значения — SELF_PERCEIVED_STAGES в db.js)
 export const STEP3_STAGE: Record<Lang, { question: string; hint: string; options: AnketaOption[] }> = {

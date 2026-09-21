@@ -295,6 +295,19 @@ async function setAgeRange(telegramId, ageRange) {
   ]);
 }
 
+// Шаг 2 анкеты — возраст свободным числом (замена категорий setAgeRange выше, которая
+// остаётся до отдельной уборки). Точечно обновляет ТОЛЬКО колонку age: не использовать
+// updateProfile вместо неё — тот перезаписывает display_name/email/phone разом и обнулил бы
+// имя, введённое на Шаге 1. Диапазон 18–100 — тот же, что у CHECK колонки и POST /profile.
+const AGE_MIN = 18;
+const AGE_MAX = 100;
+
+async function setAge(telegramId, age) {
+  if (!Number.isInteger(age) || age < AGE_MIN || age > AGE_MAX) return;
+  await touchOrCreateUser(telegramId);
+  await pool.query('UPDATE users SET age = $1 WHERE telegram_id = $2', [age, String(telegramId)]);
+}
+
 async function setSelfPerceivedStage(telegramId, stage) {
   if (!SELF_PERCEIVED_STAGES.includes(stage)) return;
   await touchOrCreateUser(telegramId);
@@ -572,6 +585,7 @@ module.exports = {
   setHabitsReminderOptIn,
   setDisplayName,
   setAgeRange,
+  setAge,
   setSelfPerceivedStage,
   setGoal,
   setLifestyle,

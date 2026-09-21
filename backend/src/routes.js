@@ -210,6 +210,22 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     })
   );
 
+  // Шаг 2 — возраст свободным числом (заменяет категории выше на фронтенде; старый
+  // /anketa/age-range пока оставлен, уборка — отдельный срез). Точечно пишет только age —
+  // НЕ через POST /profile, тот затирает display_name из Шага 1.
+  router.post(
+    '/anketa/age',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { age } = req.body || {};
+      if (!Number.isInteger(age) || age < 18 || age > 100) {
+        return res.status(400).json({ error: 'invalid_age' });
+      }
+      await db.setAge(req.telegramId, age);
+      res.json({ ok: true });
+    })
+  );
+
   // Шаг 3 — самоощущаемый этап (субъективная самооценка, не диагностический вывод
   // приложения — раздел 9.2 ТЗ).
   router.post(

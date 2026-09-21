@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { apiFetch } from '../../lib/api';
 import { useMainButton } from '../../lib/useMainButton';
+import { getTelegramFirstName } from '../../lib/telegram';
 import { STEP1_NAME, ANKETA_COMMON, type Lang } from '../../content/anketa';
 
 interface AnketaNameScreenProps {
@@ -13,7 +14,9 @@ interface AnketaNameScreenProps {
 }
 
 export default function AnketaNameScreen({ lang, onLangChange, onNext }: AnketaNameScreenProps) {
-  const [name, setName] = useState('');
+  // Автозаполнение именем из Telegram (договорённость 17.09.2026): поле остаётся редактируемым
+  // и необязательным — если имени в Telegram нет, просто пустое, как раньше.
+  const [name, setName] = useState(() => getTelegramFirstName() ?? '');
   const [submitting, setSubmitting] = useState(false);
 
   const t = STEP1_NAME[lang];

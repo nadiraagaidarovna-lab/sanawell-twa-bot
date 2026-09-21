@@ -91,3 +91,20 @@ export function bootstrapTelegram(): void {
 export function getInitDataRaw(): string | undefined {
   return retrieveRawInitData();
 }
+
+// Имя из Telegram (user.first_name) — для автозаполнения Шага 1 анкеты. Читаем ту же сырую
+// initData, что уходит на бэкенд в X-Telegram-Init-Data (работает в реальном Telegram и в
+// dev-моке), а не window.Telegram.WebApp: скрипт telegram-web-app.js в index.html не
+// подключён, и SDK этот глобал не заполняет — там имя было бы всегда пустым.
+export function getTelegramFirstName(): string | undefined {
+  try {
+    const raw = getInitDataRaw();
+    if (!raw) return undefined;
+    const user = new URLSearchParams(raw).get('user');
+    if (!user) return undefined;
+    const firstName = (JSON.parse(user) as { first_name?: unknown }).first_name;
+    return typeof firstName === 'string' && firstName.trim() ? firstName.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
