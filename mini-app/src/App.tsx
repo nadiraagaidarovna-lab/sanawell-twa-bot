@@ -17,6 +17,7 @@ import { NavigationProvider } from './lib/navigation';
 import { useNavigation } from './lib/useNavigation';
 import { useBackButton } from './lib/useBackButton';
 import { apiFetch } from './lib/api';
+import { getTelegramLanguageCode } from './lib/telegram';
 import WelcomeScreen from './screens/WelcomeScreen';
 import ConsentScreen from './screens/ConsentScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -77,12 +78,6 @@ function isAnketaStep(screen: ScreenId): boolean {
   return (ANKETA_STEPS as string[]).includes(screen);
 }
 
-declare global {
-  interface Window {
-    Telegram?: { WebApp?: { initDataUnsafe?: { user?: { language_code?: string } } } };
-  }
-}
-
 // Та же логика приоритета, что в WelcomeScreen.tsx (сохранённый язык > авто-детект по
 // Telegram > 'ru') — дублируется здесь, а не импортируется оттуда: тот файл не трогаем
 // (Срез О3), а начальный язык анкеты нужен независимо от него. Единственный известный
@@ -93,10 +88,12 @@ declare global {
 // Второстепенный сценарий (реальный Telegram language_code почти всегда и так совпадает с
 // предпочитаемым языком), самокорректируется при следующем открытии Mini App, когда
 // сохранённый выбор уже точно на сервере.
+// Автодетект — getTelegramLanguageCode() (language_code из initData), а не
+// window.Telegram.WebApp: скрипт telegram-web-app.js не подключён, прежний вариант всегда
+// давал 'ru'.
 function resolveInitialLang(savedLanguage: string | null): Lang {
   if (savedLanguage === 'ru' || savedLanguage === 'kk') return savedLanguage;
-  const tgCode = window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code;
-  return tgCode === 'kk' ? 'kk' : 'ru';
+  return getTelegramLanguageCode() ?? 'ru';
 }
 
 interface AnketaStepScreenProps {

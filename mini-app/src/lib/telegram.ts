@@ -97,13 +97,29 @@ export function getInitDataRaw(): string | undefined {
 // dev-моке), а не window.Telegram.WebApp: скрипт telegram-web-app.js в index.html не
 // подключён, и SDK этот глобал не заполняет — там имя было бы всегда пустым.
 export function getTelegramFirstName(): string | undefined {
+  const firstName = readTelegramUser()?.first_name;
+  return typeof firstName === 'string' && firstName.trim() ? firstName.trim() : undefined;
+}
+
+// Язык интерфейса Telegram (user.language_code) для автоопределения языка приложения
+// (Срез О3, ТЗ 6.2.1). Тот же источник, что у getTelegramFirstName, и по той же причине:
+// window.Telegram.WebApp.initDataUnsafe в реальном Telegram недоступен (см. выше), поэтому
+// прежнее автоопределение по нему никогда не срабатывало и все получали русский. Поддержаны
+// только 'ru' и 'kk'; всё остальное (включая 'en') и отсутствие поля — undefined, вызывающий
+// подставляет 'ru' сам. Приоритет «сохранённый выбор > автодетект > ru» — на стороне экранов.
+export function getTelegramLanguageCode(): 'ru' | 'kk' | undefined {
+  const code = readTelegramUser()?.language_code;
+  return code === 'ru' || code === 'kk' ? code : undefined;
+}
+
+// Объект user из initData (поле user — JSON внутри query-строки) или undefined, если
+// initData нет/повреждена — вне Telegram и при любой ошибке разбора молча отдаёт undefined.
+function readTelegramUser(): { first_name?: unknown; language_code?: unknown } | undefined {
   try {
     const raw = getInitDataRaw();
     if (!raw) return undefined;
     const user = new URLSearchParams(raw).get('user');
-    if (!user) return undefined;
-    const firstName = (JSON.parse(user) as { first_name?: unknown }).first_name;
-    return typeof firstName === 'string' && firstName.trim() ? firstName.trim() : undefined;
+    return user ? (JSON.parse(user) as { first_name?: unknown; language_code?: unknown }) : undefined;
   } catch {
     return undefined;
   }

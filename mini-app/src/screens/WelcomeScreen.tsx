@@ -9,12 +9,11 @@ import { useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { useNavigation } from '../lib/useNavigation';
 import { useMainButton } from '../lib/useMainButton';
+import { getTelegramLanguageCode } from '../lib/telegram';
 import logo from '../assets/sanawell-logo.png';
 import type { ScreenId } from '../lib/navigationContext';
 
 type Lang = 'ru' | 'kk';
-
-const SUPPORTED_LANGS: Lang[] = ['ru', 'kk'];
 
 // Раздел 6.2.1 ТЗ v2.12 — русский текст финальный (дословно, не перефразировать),
 // казахский — черновик, требует проверки носителем языка перед публикацией.
@@ -42,15 +41,11 @@ const TEXT: Record<
   },
 };
 
-declare global {
-  interface Window {
-    Telegram?: { WebApp?: { initDataUnsafe?: { user?: { language_code?: string } } } };
-  }
-}
-
+// Автоопределение — по language_code из initData (getTelegramLanguageCode), а не из
+// window.Telegram.WebApp: скрипт telegram-web-app.js не подключён, и прежний вариант всегда
+// возвращал 'ru'. ru/kk — как есть, всё остальное и отсутствие поля — 'ru'.
 function detectLanguage(): Lang {
-  const tgCode = window.Telegram?.WebApp?.initDataUnsafe?.user?.language_code;
-  return (SUPPORTED_LANGS as string[]).includes(tgCode ?? '') ? (tgCode as Lang) : 'ru';
+  return getTelegramLanguageCode() ?? 'ru';
 }
 
 interface WelcomeScreenProps {
