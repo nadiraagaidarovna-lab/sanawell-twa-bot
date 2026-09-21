@@ -48,7 +48,65 @@ const DOCTOR_NUDGE_TEXT =
   'ясности мыслей. Иногда в такие периоды стоит показаться врачу — гинекологу или ' +
   'терапевту — просто чтобы разобраться и получить поддержку.';
 
-function buildWeeklyReport(history) {
+// Срез «ротация + цель» (backend): пустые слоты после просевших измерений заполняются —
+// сначала одной техникой по цели из анкеты (если у цели есть прямой модуль), затем фоновой
+// ротацией Питание/Силовые. Питание/Силовые не измеряются чек-ином, поэтому раньше в отчёт
+// не попадали вовсе. «Тело» (content/bodyExercises.ts) в ротацию НЕ входит — другая форма
+// данных (без duration), не совпадает с Protocol; подключать его — отдельное решение.
+const GOAL_REASON =
+  'В анкете вы отметили, что это сейчас для вас важно — вот с чего можно начать.';
+const ROTATION_REASON = 'Не связано с отметками этой недели, но помогает системно.';
+const ROTATION_MODULES = ['nutrition', 'strength'];
+
+// users.goal — СВОБОДНЫЙ ТЕКСТ, а не enum: экран анкеты (AnketaGoalScreen.tsx) сохраняет
+// готовую подпись варианта на языке экрана («Наладить сон»), поэтому сравнение с
+// 'sleep'/'nutrition_weight' по одному лишь ключу не сработало бы никогда. Здесь — и ключи
+// (на случай, если фронтенд когда-нибудь начнёт слать value), и точные подписи из
+// mini-app/src/content/anketa.ts (STEP5_GOAL, ru и kk) — при смене подписей там обновить и
+// здесь. Остальные цели (приливы, «разобраться», уверенность, своё, null) прямого модуля не
+// имеют — рекомендацию не форсируем.
+const GOAL_TO_MODULE = {
+  sleep: 'sleep',
+  'Наладить сон': 'sleep',
+  'Ұйқыны реттеу': 'sleep',
+  nutrition_weight: 'nutrition',
+  'Наладить питание и вес': 'nutrition',
+  'Тамақтану мен салмақты реттеу': 'nutrition',
+};
+
+function goalModule(goal) {
+  if (typeof goal !== 'string') return null;
+  return GOAL_TO_MODULE[goal.trim()] ?? null;
+}
+
+// Номер недели для детерминированной ротации: без колонки/таблицы «уже показано» — отчёт
+// по-прежнему не кэшируется и пересчитывается вживую. Алматы — UTC+5 без перехода на летнее
+// время, поэтому фиксированное смещение. Неделя — с понедельника (1 января 1970 был
+// четвергом, поэтому день эпохи сдвигаем на 3), иначе смена ротации пришлась бы на четверг.
+const ALMATY_OFFSET_MS = 5 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const EPOCH_TO_MONDAY_DAYS = 3;
+
+function rotationPool() {
+  return ROTATION_MODULES.flatMap((module) =>
+    getProtocolsForModule(module).map((protocol) => ({ module, protocol }))
+  );
+}
+
+// Сдвиг пула на номер недели — каждую неделю первой идёт другая техника, внутри одной недели
+// порядок и набор стабильны.
+function rotatedPool(now) {
+  const pool = rotationPool();
+  if (pool.length === 0) return pool;
+  const days = Math.floor((now.getTime() + ALMATY_OFFSET_MS) / DAY_MS);
+  const week = Math.floor((days + EPOCH_TO_MONDAY_DAYS) / 7);
+  const offset = week % pool.length;
+  return [...pool.slice(offset), ...pool.slice(0, offset)];
+}
+
+// goal — значение users.goal (необязательно; чистота функции сохранена — БД не трогаем);
+// now — только для тестов на синтетических неделях.
+function buildWeeklyReport(history, goal = null, now = new Date()) {
   const totalDays = history.length;
 
   const affected = DIMENSIONS.map((dim) => {
@@ -65,6 +123,32 @@ function buildWeeklyReport(history) {
     for (const protocol of getProtocolsForModule(dim.module)) {
       if (recommendations.length >= MAX_RECOMMENDATIONS) break;
       recommendations.push({ dimension: dim.module, reason, protocol });
+    }
+  }
+
+  // Без единой отметки за неделю ничего сверх прежнего не добавляем: карточки «не связано с
+  // отметками этой недели» на пустой неделе выглядели бы беспричинно.
+  if (totalDays > 0) {
+    // 1) Цель из анкеты — одна техника модуля цели, если этого модуля ещё нет в
+    //    рекомендациях (измерение просело — не дублируем) и есть свободный слот.
+    const targetModule = goalModule(goal);
+    if (
+      targetModule &&
+      recommendations.length < MAX_RECOMMENDATIONS &&
+      !recommendations.some((rec) => rec.dimension === targetModule)
+    ) {
+      const [protocol] = getProtocolsForModule(targetModule);
+      if (protocol) {
+        recommendations.push({ dimension: targetModule, reason: GOAL_REASON, protocol });
+      }
+    }
+
+    // 2) Фоновая ротация Питание/Силовые — в оставшиеся слоты, без повторов: технику,
+    //    которая уже в списке (например, по цели), повторно не берём.
+    for (const { module, protocol } of rotatedPool(now)) {
+      if (recommendations.length >= MAX_RECOMMENDATIONS) break;
+      if (recommendations.some((rec) => rec.protocol.id === protocol.id)) continue;
+      recommendations.push({ dimension: module, reason: ROTATION_REASON, protocol });
     }
   }
 

@@ -444,7 +444,10 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         moodScore: row.mood_score,
         memoryScore: row.memory_score,
       }));
-      res.json(buildWeeklyReport(history));
+      // Цель из анкеты — для приоритета техник (weeklyReport.js); buildWeeklyReport остаётся
+      // чистой функцией, БД читаем здесь.
+      const user = await db.getUser(req.telegramId);
+      res.json(buildWeeklyReport(history, user?.goal ?? null));
     })
   );
 
