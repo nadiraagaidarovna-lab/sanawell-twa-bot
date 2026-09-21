@@ -58,25 +58,15 @@ const GOAL_REASON =
 const ROTATION_REASON = 'Не связано с отметками этой недели, но помогает системно.';
 const ROTATION_MODULES = ['nutrition', 'strength'];
 
-// users.goal — СВОБОДНЫЙ ТЕКСТ, а не enum: экран анкеты (AnketaGoalScreen.tsx) сохраняет
-// готовую подпись варианта на языке экрана («Наладить сон»), поэтому сравнение с
-// 'sleep'/'nutrition_weight' по одному лишь ключу не сработало бы никогда. Здесь — и ключи
-// (на случай, если фронтенд когда-нибудь начнёт слать value), и точные подписи из
-// mini-app/src/content/anketa.ts (STEP5_GOAL, ru и kk) — при смене подписей там обновить и
-// здесь. Остальные цели (приливы, «разобраться», уверенность, своё, null) прямого модуля не
-// имеют — рекомендацию не форсируем.
-const GOAL_TO_MODULE = {
-  sleep: 'sleep',
-  'Наладить сон': 'sleep',
-  'Ұйқыны реттеу': 'sleep',
-  nutrition_weight: 'nutrition',
-  'Наладить питание и вес': 'nutrition',
-  'Тамақтану мен салмақты реттеу': 'nutrition',
-};
-
-function goalModule(goal) {
-  if (typeof goal !== 'string') return null;
-  return GOAL_TO_MODULE[goal.trim()] ?? null;
+// Приоритет по цели — по КЛЮЧУ варианта (users.goal_key: 'sleep', 'nutrition_weight' и т.д.),
+// а не по тексту цели: goal хранит подпись на языке экрана, по ней сопоставление зависело бы от
+// языка и точных формулировок. Прямая связь с модулем есть только у двух целей; остальные
+// (приливы, «разобраться», уверенность, «Своё», null — в т.ч. записи до появления goal_key,
+// бэкфилла нет) прямого модуля не имеют — рекомендацию не форсируем.
+function goalModule(goalKey) {
+  if (goalKey === 'sleep') return 'sleep';
+  if (goalKey === 'nutrition_weight') return 'nutrition';
+  return null;
 }
 
 // Номер недели для детерминированной ротации: без колонки/таблицы «уже показано» — отчёт
@@ -104,9 +94,9 @@ function rotatedPool(now) {
   return [...pool.slice(offset), ...pool.slice(0, offset)];
 }
 
-// goal — значение users.goal (необязательно; чистота функции сохранена — БД не трогаем);
+// goalKey — значение users.goal_key (необязательно; чистота функции сохранена — БД не трогаем);
 // now — только для тестов на синтетических неделях.
-function buildWeeklyReport(history, goal = null, now = new Date()) {
+function buildWeeklyReport(history, goalKey = null, now = new Date()) {
   const totalDays = history.length;
 
   const affected = DIMENSIONS.map((dim) => {
@@ -131,7 +121,7 @@ function buildWeeklyReport(history, goal = null, now = new Date()) {
   if (totalDays > 0) {
     // 1) Цель из анкеты — одна техника модуля цели, если этого модуля ещё нет в
     //    рекомендациях (измерение просело — не дублируем) и есть свободный слот.
-    const targetModule = goalModule(goal);
+    const targetModule = goalModule(goalKey);
     if (
       targetModule &&
       recommendations.length < MAX_RECOMMENDATIONS &&

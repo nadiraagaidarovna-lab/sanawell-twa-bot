@@ -71,6 +71,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         lifestyleDiet: user ? user.lifestyle_diet : null,
         stressLevel: user ? user.stress_level : null,
         goal: user ? user.goal : null,
+        goalKey: user ? user.goal_key : null,
         symptomChecklist: user ? user.symptom_checklist : null,
         onboardingAnketaCompleted: !!(user && user.onboarding_anketa_completed),
         // Срез Д, Промпт 5/5 (часть 2) — «Личный кабинет»: профиль и статус запроса на
@@ -258,11 +259,16 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     '/anketa/goal',
     requireAuth,
     asyncHandler(async (req, res) => {
-      const { goal } = req.body || {};
+      const { goal, goalKey } = req.body || {};
       if (goal !== undefined && goal !== null && typeof goal !== 'string') {
         return res.status(400).json({ error: 'invalid_payload' });
       }
-      await db.setGoal(req.telegramId, goal ?? null);
+      // goalKey — необязательный ключ предустановленного варианта; тот же мягкий паттерн:
+      // не строка -> 400, строка не из списка -> db.setGoal молча запишет NULL.
+      if (goalKey !== undefined && goalKey !== null && typeof goalKey !== 'string') {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      await db.setGoal(req.telegramId, goal ?? null, goalKey ?? null);
       res.json({ ok: true });
     })
   );
@@ -458,7 +464,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
       // Цель из анкеты — для приоритета техник (weeklyReport.js); buildWeeklyReport остаётся
       // чистой функцией, БД читаем здесь.
       const user = await db.getUser(req.telegramId);
-      res.json(buildWeeklyReport(history, user?.goal ?? null));
+      res.json(buildWeeklyReport(history, user?.goal_key ?? null));
     })
   );
 

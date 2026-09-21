@@ -33,10 +33,18 @@ export default function AnketaGoalScreen({ lang, onLangChange, onNext }: AnketaG
       goalText = t.options.find((o) => o.value === selected)?.label ?? null;
     }
 
+    // Ключ предустановленного варианта ('sleep', 'nutrition_weight', ...) — не зависит от языка
+    // экрана (в отличие от goalText). Для «Своё» и «ничего не выбрано» — null. По ключу бэкенд
+    // подбирает приоритетную технику в еженедельном отчёте (users.goal_key).
+    const goalKeyValue = selected && selected !== 'custom' ? selected : null;
+
     if (goalText) {
       setSubmitting(true);
       try {
-        await apiFetch('/anketa/goal', { method: 'POST', body: JSON.stringify({ goal: goalText }) });
+        await apiFetch('/anketa/goal', {
+          method: 'POST',
+          body: JSON.stringify({ goal: goalText, goalKey: goalKeyValue }),
+        });
       } catch {
         // Не блокируем прохождение анкеты сетевой ошибкой.
       }

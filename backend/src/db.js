@@ -117,6 +117,11 @@ async function initSchema() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS stress_level INTEGER
       CHECK (stress_level BETWEEN 1 AND 10 OR stress_level IS NULL);
     ALTER TABLE users ADD COLUMN IF NOT EXISTS goal TEXT;
+    -- Ключ выбранного предустановленного варианта цели (шаг 5 анкеты): goal хранит готовую
+    -- подпись на языке экрана («Наладить сон»), по которой нельзя надёжно сопоставить цель с
+    -- модулем техник (язык, «Своё»). NULL — «Своё», не выбрано или запись до этой колонки
+    -- (бэкфилла нет). Используется только для приоритета техник в еженедельном отчёте.
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS goal_key TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS symptom_checklist JSONB;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_anketa_completed BOOLEAN NOT NULL DEFAULT false;
     -- Срез Д, Промпт 5/5 (часть 2) — «Личный кабинет» MVP (docs/personal-cabinet-v1.md).
@@ -319,10 +324,20 @@ async function setSelfPerceivedStage(telegramId, stage) {
 
 // Свободный текст, не enum: один из вариантов шага 5 ("Своё") — открытое поле, см. коммент
 // у схемы в initSchema().
-async function setGoal(telegramId, goal) {
+// Известные ключи предустановленных вариантов цели (STEP5_GOAL в mini-app/src/content/anketa.ts,
+// без 'custom'): любое другое значение goalKey — включая 'custom', пустое и неизвестное —
+// молча пишется как NULL, без ошибки, чтобы рассинхрон фронта и бэка не ломал прохождение анкеты.
+const GOAL_KEYS = ['hot_flashes', 'sleep', 'understand_body', 'confidence', 'nutrition_weight'];
+
+async function setGoal(telegramId, goal, goalKey) {
   await touchOrCreateUser(telegramId);
   const value = typeof goal === 'string' ? goal.trim().slice(0, 200) || null : null;
-  await pool.query('UPDATE users SET goal = $1 WHERE telegram_id = $2', [value, String(telegramId)]);
+  const keyValue = typeof goalKey === 'string' && GOAL_KEYS.includes(goalKey) ? goalKey : null;
+  await pool.query('UPDATE users SET goal = $1, goal_key = $2 WHERE telegram_id = $3', [
+    value,
+    keyValue,
+    String(telegramId),
+  ]);
 }
 
 // Шаг 6 — один блок из 3 подвопросов, полностью необязательный и пропускаемый целиком
