@@ -43,9 +43,13 @@ export default function BodyScreen() {
     if (!section) return;
     section.open = true;
 
-    const row = Array.from(section.querySelectorAll<HTMLElement>('[data-item]')).find(
-      (el) => el.dataset.item === target.itemTitle
-    );
+    // itemTitle необязателен: без него (ссылка на раздел целиком) раскрывается только секция и
+    // экран прокручивается к её началу; с ним — как раньше, к конкретному упражнению.
+    const row = target.itemTitle
+      ? Array.from(section.querySelectorAll<HTMLElement>('[data-item]')).find(
+          (el) => el.dataset.item === target.itemTitle
+        )
+      : undefined;
     if (row instanceof HTMLDetailsElement) row.open = true;
     (row ?? section).scrollIntoView({ block: 'start' });
   }, []);

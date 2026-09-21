@@ -21,14 +21,18 @@ const ALMATY_OFFSET_MS = 5 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const EPOCH_TO_MONDAY_DAYS = 3;
 
-export function bodyExercisePool(): BodyTarget[] {
+// Конкретное упражнение — всегда пара «раздел + упражнение» (itemTitle тут обязателен, в
+// отличие от общего BodyTarget, где он опционален для ссылок на раздел целиком).
+type BodyExerciseTarget = Required<BodyTarget>;
+
+export function bodyExercisePool(): BodyExerciseTarget[] {
   return BODY_SECTIONS.filter((section) => !EXCLUDED_SECTION_TITLES.includes(section.title)).flatMap((section) =>
     section.items.map((item) => ({ sectionTitle: section.title, itemTitle: item.title }))
   );
 }
 
 /** Упражнение недели по номеру недели от `now` (параметр — только для проверки на синтетических неделях). */
-export function pickBodyExercise(now: Date = new Date()): BodyTarget | null {
+export function pickBodyExercise(now: Date = new Date()): BodyExerciseTarget | null {
   const pool = bodyExercisePool();
   if (pool.length === 0) return null;
   const days = Math.floor((now.getTime() + ALMATY_OFFSET_MS) / DAY_MS);

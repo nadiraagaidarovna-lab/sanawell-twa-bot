@@ -874,6 +874,24 @@ h1 {
   background: var(--v2-c3);
 }
 
+/* Ссылка-переход из карточки Гида в «Тело» («Смотри упражнения для плеч») — тот же приём, что
+   .protocol-guide-link в «Самочувствии» (подчёркнутая ссылка без рамки). Цвет --v2-wine-soft, а
+   не акцент папки --v2-c3: розовый на пудровом фоне давал бы слабый контраст. */
+.v2-accent-c3 .guide-link {
+  align-self: flex-start;
+  margin: 6px 0 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--v2-wine-soft);
+  text-decoration: underline;
+  text-align: left;
+  cursor: pointer;
+}
+
 /* Срез Д, Промпт 5/5 — AiAssistantScreen.tsx (статичный FAQ, аккордеон на нативных
    <details>). Акцент экрана вынесен в одну пару переменных --faq-accent/--faq-accent-bg,
    чтобы его легко поменять: пока взят --v2-c5 (золотой) — единственный из шести цветов

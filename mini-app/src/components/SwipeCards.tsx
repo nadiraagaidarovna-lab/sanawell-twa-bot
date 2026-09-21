@@ -4,16 +4,18 @@
 // (index/onIndexChange), чтобы MainButton («Далее») мог листать карточки программно,
 // синхронно с ручным свайпом пользователя. Переиспользуется — тот же паттерн нужен для
 // тизера "Этапы жизни после 40" (ТЗ 5.3.1/6.2, следующий срез) и полной версии темы 0.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 interface SwipeCardsProps {
   /** Каждая карточка — массив абзацев (рендерятся отдельными <p>). */
   cards: string[][];
   index: number;
   onIndexChange: (index: number) => void;
+  /** Необязательное содержимое под текстом карточки (например, ссылка); по индексу карточки. */
+  footers?: (ReactNode | null)[];
 }
 
-export default function SwipeCards({ cards, index, onIndexChange }: SwipeCardsProps) {
+export default function SwipeCards({ cards, index, onIndexChange, footers }: SwipeCardsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // true, пока идёт скролл, который вызвали МЫ САМИ (клик по MainButton/точке) — чтобы
   // не принять его хвост за ручной свайп и не откатить index обратно. Ловили именно
@@ -75,6 +77,7 @@ export default function SwipeCards({ cards, index, onIndexChange }: SwipeCardsPr
                 {p}
               </p>
             ))}
+            {footers?.[i]}
           </div>
         ))}
       </div>
