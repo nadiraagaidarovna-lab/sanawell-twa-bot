@@ -9,8 +9,11 @@
 // между открытием приложения и основной функцией) убрана — сам чек-ин (CheckinScreen.tsx в
 // режиме embedded: сон/настроение/голова + необязательное поле, нативная MainButton
 // «Отправить») теперь виден сразу при открытии, а под ним — блок «Мой прогресс»
-// (ProgressHook.tsx). Папка «Как ты сегодня» в сетке ниже оставлена как была и по-прежнему
-// ведёт на отдельный экран чек-ина — решение, нужна ли она теперь, за Надирой.
+// (ProgressHook.tsx). Папка «Как ты сегодня» (плитка c1) из сетки убрана — решение Надиры:
+// она полностью дублировала встроенный чек-ин выше, своей функции не осталось; в сетке
+// теперь 5 плиток (последняя, при нечётном числе, растягивается на обе колонки — см.
+// .folder-grid в index.css). Экран 'checkin' (CheckinScreen.tsx) в App.tsx остаётся —
+// с главного экрана он больше недостижим, это безвредный мёртвый код до отдельной уборки.
 import { useState } from 'react';
 import { useNavigation } from '../lib/useNavigation';
 import BottomNav from '../components/BottomNav';
@@ -30,39 +33,6 @@ export default function HomeScreen() {
       <ProgressHook refreshKey={progressRefresh} />
 
       <div className="folder-grid">
-        <button type="button" className="folder-card c1" onClick={() => push('checkin')}>
-          <div className="folder-icon">
-            <svg viewBox="0 0 120 100" role="img" aria-label="Папка «Как ты сегодня» — иллюстрация восхода солнца">
-              <defs>
-                <linearGradient id="fg1" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stopColor="#E88E68" />
-                  <stop offset="1" stopColor="#C1613F" />
-                </linearGradient>
-                <linearGradient id="sg1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#FBDCC6" />
-                  <stop offset="1" stopColor="#F0AE86" />
-                </linearGradient>
-              </defs>
-              <rect x="14" y="15" width="36" height="13" rx="6" fill="url(#fg1)" />
-              <rect x="9" y="23" width="102" height="65" rx="13" fill="url(#fg1)" />
-              <path d="M9 61 H111 V78 Q111 88 101 88 H19 Q9 88 9 78 Z" fill="rgba(0,0,0,0.10)" />
-              <g transform="rotate(-4 60 55)">
-                <rect x="21" y="31" width="78" height="46" rx="8" fill="#fff" opacity="0.92" />
-                <rect x="24" y="34" width="72" height="40" rx="6" fill="url(#sg1)" />
-                <line x1="28" y1="64" x2="92" y2="64" stroke="#A85433" strokeWidth="1.4" opacity="0.4" />
-                <path d="M46 64 A14 14 0 0 1 74 64 Z" fill="#C1613F" />
-                <g stroke="#C1613F" strokeWidth="2.2" strokeLinecap="round">
-                  <line x1="60" y1="41" x2="60" y2="47" />
-                  <line x1="48" y1="46" x2="52" y2="50" />
-                  <line x1="72" y1="46" x2="68" y2="50" />
-                </g>
-              </g>
-            </svg>
-          </div>
-          <div className="folder-title">Как ты сегодня</div>
-          <div className="folder-sub">сон · настроение · самочувствие</div>
-        </button>
-
         <button type="button" className="folder-card c2" onClick={() => push('techniques')}>
           <div className="folder-icon">
             <svg viewBox="0 0 120 100" role="img" aria-label="Папка «Мой план поддержки» — иллюстрация гантели и гири">
