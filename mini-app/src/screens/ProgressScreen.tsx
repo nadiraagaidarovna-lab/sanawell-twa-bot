@@ -8,11 +8,17 @@
 // стал "Самочувствие" (только текст — ID экрана 'progress' и имя файла не менялись). Ни
 // GET /api/checkin/history, ни GET /api/checkin/weekly-report, ни логика подбора техник
 // не менялись.
+// Срез «Гид + персонализация» (фронтенд, бэкенд не тронут): свой GET /me (тот же паттерн, что в
+// GuideScreen.tsx) даёт (1) ссылку «И почитайте в Гиде: Мозг» под техникой на просевшую
+// Голову и (2) подпись над графиком из отмеченных в анкете Сон/Настроение/Голова. При
+// ошибке /me экран ведёт себя как раньше — без подписи и без ссылки.
 import { useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import { useNavigation } from '../lib/useNavigation';
 import WeeklyChart, { type WeeklyChartEntry } from '../components/WeeklyChart';
 import BottomNav from '../components/BottomNav';
+import { getTheme0Cards, type GuideCard } from '../content/guide';
+import { setGuideTarget } from '../lib/guideTarget';
 
 interface HistoryEntry {
   date: string;
@@ -41,8 +47,36 @@ interface WeeklyReport {
   doctorNudge: { show: boolean; text: string | null };
 }
 
+interface MeResponse {
+  menopausePath: 'natural' | 'surgical' | 'oncological' | null;
+  // { категория анкеты: [отмеченные пункты] } — ключи hot_flashes/mood/head/body/sleep/intimacy.
+  symptomChecklist: Record<string, unknown> | null;
+}
+
 type ViewState = 'loading' | 'loaded' | 'error';
 type ReportState = 'loading' | 'loaded' | 'error';
+
+// Только те категории чек-листа, у которых есть линия на графике (Сон/Настроение/Голова, в
+// порядке легенды). hot_flashes/body/intimacy сознательно не показываем: для них нет
+// измеряемых данных, а для intimacy в приложении пока нет и контента.
+const CHART_CATEGORIES: { key: string; label: string }[] = [
+  { key: 'sleep', label: 'сон' },
+  { key: 'mood', label: 'настроение' },
+  { key: 'head', label: 'голова' },
+];
+
+function chartCaption(checklist: MeResponse['symptomChecklist']): string | null {
+  if (!checklist) return null;
+  const labels = CHART_CATEGORIES.filter(({ key }) => {
+    const items = checklist[key];
+    return Array.isArray(items) && items.length > 0;
+  }).map(({ label }) => label);
+  if (labels.length === 0) return null;
+
+  const list =
+    labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} и ${labels[labels.length - 1]}`;
+  return `В анкете вы отметили: ${list} — вот как это выглядело на этой неделе.`;
+}
 
 const MONTHS_RU = [
   'янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
@@ -61,6 +95,26 @@ export default function ProgressScreen() {
 
   const [reportState, setReportState] = useState<ReportState>('loading');
   const [report, setReport] = useState<WeeklyReport | null>(null);
+
+  // Необязательный блок: пока /me не загрузился (или упал) — me остаётся null, экран без
+  // подписи и без ссылки в Гид, как до этого среза.
+  const [me, setMe] = useState<MeResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    apiFetch<MeResponse>('/me')
+      .then((data) => {
+        if (!cancelled) setMe(data);
+      })
+      .catch(() => {
+        // Graceful-деградация: подпись и ссылка — дополнение, не критичный блок.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,6 +158,19 @@ export default function ProgressScreen() {
 
   const weekEntries: WeeklyChartEntry[] = history.slice(-7);
 
+  const caption = me ? chartCaption(me.symptomChecklist) : null;
+
+  // Карточка Гида, к которой привязан тег просевшего измерения: сейчас это «Мозг» для Головы
+  // (cognitive). Набор карточек зависит от пути, но «Мозг» есть во всех вариантах Темы 0.
+  const guideCardFor = (dimension: string): GuideCard | undefined =>
+    me ? getTheme0Cards(me.menopausePath).find((card) => card.tag === dimension) : undefined;
+
+  // Ссылка — одна на измерение, под первой его техникой (у Головы их две, повторять не нужно).
+  const firstRecIndexByDimension = new Map<string, number>();
+  report?.recommendations.forEach((rec, i) => {
+    if (!firstRecIndexByDimension.has(rec.dimension)) firstRecIndexByDimension.set(rec.dimension, i);
+  });
+
   return (
     <main className="screen v2-screen v2-accent-c6">
       <p className="eyebrow">SanaWell</p>
@@ -124,25 +191,44 @@ export default function ProgressScreen() {
       {view === 'loaded' && (
         <>
           <p className="module-heading">Эта неделя</p>
+          {caption && <p className="chart-caption">{caption}</p>}
           <WeeklyChart entries={weekEntries} />
 
           {reportState === 'loaded' && report && report.recommendations.length > 0 && (
             <div className="protocol-list">
-              {report.recommendations.map((rec) => (
-                <div className="protocol-card" key={rec.protocol.id}>
-                  <p className="protocol-reason">{rec.reason}</p>
-                  <div className="protocol-card-header">
-                    <span className="protocol-title">{rec.protocol.title}</span>
-                    <span className="protocol-duration">{rec.protocol.duration}</span>
+              {report.recommendations.map((rec, recIndex) => {
+                const guideCard =
+                  firstRecIndexByDimension.get(rec.dimension) === recIndex
+                    ? guideCardFor(rec.dimension)
+                    : undefined;
+                return (
+                  <div className="protocol-card" key={rec.protocol.id}>
+                    <p className="protocol-reason">{rec.reason}</p>
+                    <div className="protocol-card-header">
+                      <span className="protocol-title">{rec.protocol.title}</span>
+                      <span className="protocol-duration">{rec.protocol.duration}</span>
+                    </div>
+                    <ol className="protocol-steps">
+                      {rec.protocol.steps.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ol>
+                    <p className="protocol-note">{rec.protocol.note}</p>
+                    {guideCard && (
+                      <button
+                        type="button"
+                        className="protocol-guide-link"
+                        onClick={() => {
+                          if (guideCard.tag) setGuideTarget(guideCard.tag);
+                          push('guide');
+                        }}
+                      >
+                        И почитайте в Гиде: {guideCard.title}
+                      </button>
+                    )}
                   </div>
-                  <ol className="protocol-steps">
-                    {rec.protocol.steps.map((step, i) => (
-                      <li key={i}>{step}</li>
-                    ))}
-                  </ol>
-                  <p className="protocol-note">{rec.protocol.note}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

@@ -9,6 +9,7 @@ import { apiFetch, ApiError } from '../lib/api';
 import SwipeCards from '../components/SwipeCards';
 import BottomNav from '../components/BottomNav';
 import { getTheme0Cards } from '../content/guide';
+import { consumeGuideTarget } from '../lib/guideTarget';
 
 interface MeResponse {
   menopausePath: 'natural' | 'surgical' | 'oncological' | null;
@@ -46,6 +47,21 @@ export default function GuideScreen() {
 
   const theme0Cards = getTheme0Cards(view.state === 'loaded' ? view.menopausePath : null);
   const cards: string[][] = theme0Cards.map((card) => [card.title, card.body]);
+
+  // Если Гид открыли ссылкой из «Самочувствия» («И почитайте в Гиде: Мозг») — после того как
+  // известен menopausePath (набор карточек, а с ним и индекс нужной, зависит от пути)
+  // листаем сразу на карточку с этим тегом. Пока идёт загрузка — ничего не забираем, чтобы
+  // тег не потерялся; без ссылки (обычный вход) тега нет, Гид открывается с первой карточки.
+  useEffect(() => {
+    if (view.state === 'loading') return undefined;
+    const tag = consumeGuideTarget();
+    if (!tag) return undefined;
+    const targetIndex = getTheme0Cards(view.state === 'loaded' ? view.menopausePath : null).findIndex(
+      (card) => card.tag === tag
+    );
+    if (targetIndex >= 0) setIndex(targetIndex);
+    return undefined;
+  }, [view]);
 
   return (
     <main className="screen v2-screen v2-accent-c3">

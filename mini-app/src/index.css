@@ -822,6 +822,29 @@ h1 {
   color: var(--v2-c6);
 }
 
+/* Подпись над графиком «Самочувствия» (из анкеты) и ссылка в Гид под техникой — Срез
+   «Гид + персонализация». Только под .v2-accent-c6, общие классы не тронуты. */
+.v2-accent-c6 .chart-caption {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--v2-ink-soft);
+}
+.v2-accent-c6 .protocol-guide-link {
+  display: block;
+  margin: 10px 0 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--v2-c6);
+  text-decoration: underline;
+  text-align: left;
+  cursor: pointer;
+}
+
 /* Срез Д, Промпт 4 — GuideScreen.tsx (папка «Гид», Тема 0 «Этапы жизни после 40» через
    SwipeCards.tsx). .body-text/.swipe-dot сами по себе не трогаем — переопределение только
    под .v2-screen/.v2-accent-c3, тот же паттерн, что и раньше. --v2-c3 (пудрово-розовый) —
