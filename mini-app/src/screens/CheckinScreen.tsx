@@ -2,7 +2,13 @@
 // 24 часов (ТЗ 6.3.3/6.3.4). При загрузке экран спрашивает бэкенд, есть ли уже чек-ин
 // за сегодня — если да, сразу показывает подтверждение вместо пустой формы (иначе
 // повторный визит в тот же день выглядел бы так, будто чек-ин потерялся).
-import { useEffect, useState } from 'react';
+//
+// Режим embedded (срез «чек-ин на главный экран»): тот же экран, но без своей обёртки
+// <main>/заголовка страницы — HomeScreen.tsx вставляет его прямо в главный экран, чтобы
+// чек-ин был виден при открытии приложения, без промежуточного нажатия. Логика (загрузка
+// «уже отправлен сегодня», отправка, «Исправить», MainButton «Отправить») не менялась;
+// отдельный экран /checkin (папка «Как ты сегодня») работает как раньше.
+import { useEffect, useState, type ReactNode } from 'react';
 import { hapticFeedbackNotificationOccurred } from '@telegram-apps/sdk';
 import ScaleSlider from '../components/ScaleSlider';
 import { useMainButton } from '../lib/useMainButton';
@@ -19,7 +25,31 @@ interface CheckinRecord {
 type ViewState = 'loading' | 'form' | 'confirmed';
 type SubmitState = 'idle' | 'submitting' | 'error';
 
-export default function CheckinScreen() {
+interface CheckinScreenProps {
+  embedded?: boolean;
+  /** Вызывается после успешной отправки — главный экран обновляет блок «Мой прогресс». */
+  onSaved?: () => void;
+}
+
+function Shell({ embedded, title, children }: { embedded: boolean; title: string; children: ReactNode }) {
+  if (embedded) {
+    return (
+      <section className="home-checkin">
+        <h2 className="home-checkin-title">{title}</h2>
+        {children}
+      </section>
+    );
+  }
+  return (
+    <main className="screen">
+      <p className="eyebrow">SanaWell</p>
+      <h1>{title}</h1>
+      {children}
+    </main>
+  );
+}
+
+export default function CheckinScreen({ embedded = false, onSaved }: CheckinScreenProps) {
   const [view, setView] = useState<ViewState>('loading');
   const [saved, setSaved] = useState<CheckinRecord | null>(null);
 
@@ -71,6 +101,7 @@ export default function CheckinScreen() {
       setSaved(checkin);
       setView('confirmed');
       setSubmitState('idle');
+      onSaved?.();
     } catch (e) {
       if (hapticFeedbackNotificationOccurred.isAvailable()) {
         hapticFeedbackNotificationOccurred('error');
@@ -100,21 +131,17 @@ export default function CheckinScreen() {
 
   if (view === 'loading') {
     return (
-      <main className="screen">
-        <p className="eyebrow">SanaWell</p>
-        <h1>Как вы сегодня?</h1>
-        <p className="body-text" style={{ color: 'var(--hint)' }}>
+      <Shell embedded={embedded} title="Как вы сегодня?">
+        <p className="body-text" style={{ color: embedded ? 'var(--v2-ink-soft)' : 'var(--hint)' }}>
           Загружаю…
         </p>
-      </main>
+      </Shell>
     );
   }
 
   if (view === 'confirmed' && saved) {
     return (
-      <main className="screen">
-        <p className="eyebrow">SanaWell</p>
-        <h1>Спасибо 🤍</h1>
+      <Shell embedded={embedded} title="Спасибо 🤍">
         <p className="body-text">
           Записала: сон {saved.sleepScore}, настроение {saved.moodScore}, голова{' '}
           {saved.memoryScore}
@@ -125,15 +152,12 @@ export default function CheckinScreen() {
             Исправить
           </button>
         )}
-      </main>
+      </Shell>
     );
   }
 
   return (
-    <main className="screen">
-      <p className="eyebrow">SanaWell</p>
-      <h1>Как вы сегодня?</h1>
-
+    <Shell embedded={embedded} title="Как вы сегодня?">
       <div className="scales">
         <ScaleSlider label="Сон" hint="пробуждения, бессонница" value={sleep} onChange={setSleep} />
         <ScaleSlider
@@ -167,6 +191,6 @@ export default function CheckinScreen() {
           Не удалось сохранить: {submitError}
         </p>
       )}
-    </main>
+    </Shell>
   );
 }

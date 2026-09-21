@@ -5,28 +5,29 @@
 // Надирой мокапа docs/design/main-screen-reference.html — заменён только статичный мокап
 // на реальные интерактивные карточки с onClick-переходами.
 //
-// "Как ты сегодня" (чек-ин) и "Запись к врачу" (партнёры), а также нативный MainButton
-// "Начать чек-ин" — ведут на уже существующие, не изменённые в этом срезе экраны. "Мой
-// план поддержки" (техники) и "Самочувствие" (график) тоже ведут на существующие экраны
-// без изменений — редизайн их СОДЕРЖИМОГО под папку 2/6 (ТЗ 4.4.1) — отдельные промпты
-// 2/5 и 3/5, не этот. "Гид" и "Тело" — новые экраны-плейсхолдеры, см. GuideScreen.tsx/
-// BodyScreen.tsx.
+// Срез «чек-ин на главный экран»: отдельная нативная кнопка «Начать чек-ин» (лишний шаг
+// между открытием приложения и основной функцией) убрана — сам чек-ин (CheckinScreen.tsx в
+// режиме embedded: сон/настроение/голова + необязательное поле, нативная MainButton
+// «Отправить») теперь виден сразу при открытии, а под ним — блок «Мой прогресс»
+// (ProgressHook.tsx). Папка «Как ты сегодня» в сетке ниже оставлена как была и по-прежнему
+// ведёт на отдельный экран чек-ина — решение, нужна ли она теперь, за Надирой.
+import { useState } from 'react';
 import { useNavigation } from '../lib/useNavigation';
-import { useMainButton } from '../lib/useMainButton';
 import BottomNav from '../components/BottomNav';
+import CheckinScreen from './CheckinScreen';
+import ProgressHook from '../components/ProgressHook';
 
 export default function HomeScreen() {
   const { push } = useNavigation();
-
-  useMainButton({
-    text: 'Начать чек-ин',
-    onClick: () => push('checkin'),
-  });
+  const [progressRefresh, setProgressRefresh] = useState(0);
 
   return (
     <main className="screen v2-screen">
       <p className="eyebrow">SanaWell</p>
       <h1>Здравствуйте 🤍</h1>
+
+      <CheckinScreen embedded onSaved={() => setProgressRefresh((n) => n + 1)} />
+      <ProgressHook refreshKey={progressRefresh} />
 
       <div className="folder-grid">
         <button type="button" className="folder-card c1" onClick={() => push('checkin')}>

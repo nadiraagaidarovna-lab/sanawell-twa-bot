@@ -436,11 +436,28 @@ h1 {
    фоном: тёплый пудрово-розовый, а не базовый --bg/--sw-cream, который используется везде
    остальное. Терракота/золото/вино — акцентами поверх него, не базовый фон сами по себе. */
 .onboarding-welcome {
-  background: #f7e3dc;
+  /* Фон и цвета текста — из одной пары токенов --v2-* (они меняются вместе с темой), а не
+     жёсткий #f7e3dc + цвет текста темы Telegram: в тёмной теме это давало белый текст на
+     пудровом фоне (нечитаемо). Тот же пудровый оттенок, что и был, просто адаптивный. */
+  background: var(--v2-bg);
+  color: var(--v2-ink);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.onboarding-welcome .body-text {
+  color: var(--v2-ink);
+}
+
+.onboarding-welcome .lang-toggle button {
+  color: var(--v2-ink-soft);
+}
+
+.onboarding-welcome .lang-toggle button.active {
+  background: var(--v2-surface-2);
+  color: var(--v2-terracotta);
 }
 
 .onboarding-welcome-logo {
@@ -453,13 +470,13 @@ h1 {
 .onboarding-welcome-disclaimer {
   font-size: 13px;
   line-height: 1.5;
-  color: var(--hint);
+  color: var(--v2-ink-soft);
   margin: 0 0 28px;
 }
 
 .onboarding-welcome-hint {
   font-size: 12px;
-  color: var(--hint);
+  color: var(--v2-ink-soft);
   text-align: center;
   margin: 18px 0 0;
 }
@@ -1055,6 +1072,79 @@ details[open] > .faq-question::after {
 .v2-accent-cabinet .lang-toggle button.active {
   background: var(--v2-surface-2);
   color: var(--cabinet-accent);
+}
+
+/* Чек-ин на главном экране (CheckinScreen.tsx в режиме embedded, HomeScreen.tsx). Сами
+   классы .scale/.comment-input/.btn-secondary общие с отдельным экраном чек-ина на системной
+   теме Telegram и не менялись — переопределение только под .home-checkin, токены --v2-*
+   (без новых цветов), чтобы на пудровом фоне главного экрана всё читалось в обеих темах. */
+.home-checkin {
+  margin-bottom: 8px;
+}
+.home-checkin-title {
+  margin: 4px 0 4px;
+  font-size: 20px;
+  color: var(--v2-ink);
+}
+.home-checkin .scales {
+  margin: 12px 0 18px;
+}
+.home-checkin .scale {
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+}
+.home-checkin .scale-label {
+  color: var(--v2-ink);
+}
+.home-checkin .scale-value {
+  color: var(--v2-terracotta);
+}
+.home-checkin .scale-hint {
+  color: var(--v2-ink-soft);
+}
+.home-checkin .scale-input {
+  background: var(--v2-surface-2);
+}
+.home-checkin .scale-input::-moz-range-track {
+  background: var(--v2-surface-2);
+}
+.home-checkin .comment-label {
+  color: var(--v2-ink-soft);
+}
+.home-checkin .comment-input {
+  background: var(--v2-surface);
+  color: var(--v2-ink);
+  border-color: var(--v2-gold);
+}
+.home-checkin .btn-secondary {
+  border-color: var(--v2-terracotta);
+  color: var(--v2-terracotta);
+}
+
+/* Блок «Мой прогресс» под чек-ином на главном экране (ProgressHook.tsx). */
+.progress-hook {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  margin: 4px 0 16px;
+  padding: 12px 16px;
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: 16px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.progress-hook-main {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--v2-ink);
+}
+.progress-hook-sub {
+  font-size: 13px;
+  color: var(--v2-ink-soft);
 }
 
 /* Папка «Тело» — BodyScreen.tsx (аккордеон на нативных <details>, тот же приём, что у FAQ
