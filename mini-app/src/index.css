@@ -1359,3 +1359,372 @@ details[open] > .ex-item-title::after {
 .ex-steps li + li {
   margin-top: 4px;
 }
+
+/* ===== SannaWell v3 — редизайн Home (TASK 01, брифинг «REFACTOR THE EXISTING APP») =====
+   Новый семантический слой токенов для components/home/* и HomeScreen.tsx. НЕ заменяет и не
+   удаляет --sw-terracotta/--v2-* — те остаются как есть на всех уже сданных экранах
+   (папки-назначения Techniques/Guide/Body/Partners/Progress, Кабинет, FAQ, анкета, чек-ин
+   как отдельный экран) до их отдельного, ещё не запланированного среза миграции. Шалфейно-
+   зелёный — новый акцент только для новых Home-компонентов, решение зафиксировано отдельно
+   от остальной палитры. */
+:root {
+  --sw-primary: #3f7563;
+  --sw-primary-soft: rgba(63, 117, 99, 0.12);
+  --sw-primary-hover: #345f51;
+  --sw-primary-text: #ffffff;
+
+  --sw-v3-bg: #fbf7f2;
+  --sw-v3-surface: #ffffff;
+  --sw-v3-ink: #24211d;
+  --sw-v3-ink-soft: #746b62;
+  --sw-v3-border: rgba(36, 33, 29, 0.09);
+
+  --sw-space-1: 4px;
+  --sw-space-2: 8px;
+  --sw-space-3: 12px;
+  --sw-space-4: 16px;
+  --sw-space-5: 24px;
+  --sw-space-6: 32px;
+
+  --sw-radius-lg: 24px;
+  --sw-radius-md: 20px;
+  --sw-radius-sm: 16px;
+
+  --sw-text-page: 28px;
+  --sw-text-section: 20px;
+  --sw-text-card-title: 17px;
+  --sw-text-body: 15px;
+  --sw-text-caption: 13px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sw-primary: #6fb39c;
+    --sw-primary-soft: rgba(111, 179, 156, 0.18);
+    --sw-primary-hover: #85c1ac;
+    --sw-primary-text: #12241d;
+
+    --sw-v3-bg: #17140f;
+    --sw-v3-surface: #211d18;
+    --sw-v3-ink: #f3ede4;
+    --sw-v3-ink-soft: #b8ada1;
+    --sw-v3-border: rgba(243, 237, 228, 0.12);
+  }
+}
+
+.sw-home {
+  background: var(--sw-v3-bg);
+  color: var(--sw-v3-ink);
+  min-height: 100vh;
+  /* Клиренс снизу — то же значение 100px, что уже проверено для существующей фиксированной
+     .bottom-nav (см. .v2-screen выше), BottomNav.tsx в этом срезе не меняется. */
+  padding: calc(var(--sw-space-4) + env(safe-area-inset-top, 0px)) var(--sw-space-4) 100px;
+}
+
+.sw-home-header {
+  margin-bottom: var(--sw-space-5);
+}
+
+.sw-eyebrow {
+  color: var(--sw-primary);
+  font-size: var(--sw-text-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin: 0 0 var(--sw-space-2);
+}
+
+.sw-greeting {
+  font-size: var(--sw-text-page);
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 var(--sw-space-1);
+  color: var(--sw-v3-ink);
+}
+
+.sw-subgreeting {
+  font-size: var(--sw-text-body);
+  color: var(--sw-v3-ink-soft);
+  margin: 0;
+}
+
+.sw-section {
+  margin: var(--sw-space-6) 0 0;
+}
+
+.sw-section-title {
+  font-size: var(--sw-text-section);
+  font-weight: 700;
+  color: var(--sw-v3-ink);
+  margin: 0 0 var(--sw-space-3);
+}
+
+/* StateCard — hero-центр Home (п.7 брифа). */
+.sw-state-card {
+  background: var(--sw-v3-surface);
+  border: 1px solid var(--sw-v3-border);
+  border-radius: var(--sw-radius-lg);
+  padding: var(--sw-space-5) var(--sw-space-4);
+  box-shadow: 0 1px 2px rgba(36, 33, 29, 0.04);
+}
+
+.sw-state-label {
+  font-size: var(--sw-text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sw-v3-ink-soft);
+  margin: 0 0 var(--sw-space-2);
+}
+
+.sw-state-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sw-space-2);
+  margin-bottom: var(--sw-space-1);
+}
+
+.sw-state-value {
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--sw-primary);
+  line-height: 1;
+}
+
+.sw-state-max {
+  font-size: var(--sw-text-body);
+  color: var(--sw-v3-ink-soft);
+}
+
+.sw-state-word {
+  font-size: var(--sw-text-card-title);
+  font-weight: 600;
+  color: var(--sw-v3-ink);
+  margin: 0 0 var(--sw-space-4);
+}
+
+.sw-state-empty-title {
+  font-size: var(--sw-text-card-title);
+  font-weight: 700;
+  color: var(--sw-v3-ink);
+  margin: 0 0 var(--sw-space-4);
+}
+
+.sw-cta-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sw-space-2);
+  border: none;
+  border-radius: var(--sw-radius-sm);
+  padding: 14px 22px;
+  background: var(--sw-primary);
+  color: var(--sw-primary-text);
+  font: inherit;
+  font-size: var(--sw-text-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+.sw-cta-primary:active {
+  background: var(--sw-primary-hover);
+}
+
+/* Встроенный чек-ин (CheckinScreen.tsx, режим embedded — сам компонент не менялся).
+   Переопределение только под .sw-checkin-inline, общие .scale/.comment-input/.btn-secondary
+   не трогаем — тот же приём, что раньше был у .home-checkin под --v2-*. Полный список
+   свойств повторяет то, что задавал .home-checkin, чтобы не осталось “протечек” старой
+   пудровой палитры внутри новой карточки v3. */
+.sw-checkin-inline {
+  margin-top: var(--sw-space-4);
+  background: var(--sw-v3-surface);
+  border: 1px solid var(--sw-v3-border);
+  border-radius: var(--sw-radius-lg);
+  padding: var(--sw-space-4);
+}
+.sw-checkin-inline .home-checkin-title {
+  color: var(--sw-v3-ink);
+}
+.sw-checkin-inline .scale {
+  background: var(--sw-v3-bg);
+  border: 1px solid var(--sw-v3-border);
+}
+.sw-checkin-inline .scale-label {
+  color: var(--sw-v3-ink);
+}
+.sw-checkin-inline .scale-value {
+  color: var(--sw-primary);
+}
+.sw-checkin-inline .scale-hint {
+  color: var(--sw-v3-ink-soft);
+}
+.sw-checkin-inline .scale-input,
+.sw-checkin-inline .scale-input::-moz-range-track {
+  background: var(--sw-v3-surface);
+}
+.sw-checkin-inline .comment-label {
+  color: var(--sw-v3-ink-soft);
+}
+.sw-checkin-inline .comment-input {
+  background: var(--sw-v3-surface);
+  color: var(--sw-v3-ink);
+  border-color: var(--sw-v3-border);
+}
+.sw-checkin-inline .btn-secondary {
+  border-color: var(--sw-primary);
+  color: var(--sw-primary);
+}
+
+/* MiniSparkline — «Эта неделя» (п.9 брифа). */
+.sw-sparkline-card {
+  background: var(--sw-v3-surface);
+  border: 1px solid var(--sw-v3-border);
+  border-radius: var(--sw-radius-md);
+  padding: var(--sw-space-4);
+}
+.sw-sparkline-empty {
+  font-size: var(--sw-text-body);
+  color: var(--sw-v3-ink-soft);
+  margin: 0;
+}
+
+/* InsightCard — «Мы заметили» (п.10 брифа). Тонировка primary-soft — единственный
+   некритичный цветовой акцент, не отдельный "секондари"-цвет. */
+.sw-insight-card {
+  background: var(--sw-primary-soft);
+  border-radius: var(--sw-radius-md);
+  padding: var(--sw-space-4);
+}
+.sw-insight-title {
+  font-size: var(--sw-text-card-title);
+  font-weight: 700;
+  color: var(--sw-v3-ink);
+  margin: 0 0 var(--sw-space-2);
+}
+.sw-insight-body {
+  font-size: var(--sw-text-body);
+  line-height: 1.5;
+  color: var(--sw-v3-ink);
+  margin: 0 0 var(--sw-space-3);
+}
+.sw-insight-cta {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--sw-text-caption);
+  font-weight: 700;
+  color: var(--sw-primary);
+  cursor: pointer;
+}
+
+/* TodayActionCard — «Сегодня для вас» (п.11 брифа). */
+.sw-action-card {
+  background: var(--sw-v3-surface);
+  border: 1px solid var(--sw-v3-border);
+  border-radius: var(--sw-radius-md);
+  padding: var(--sw-space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sw-space-3);
+}
+.sw-action-eyebrow {
+  font-size: var(--sw-text-caption);
+  color: var(--sw-v3-ink-soft);
+  margin: 0 0 var(--sw-space-1);
+}
+.sw-action-title {
+  font-size: var(--sw-text-card-title);
+  font-weight: 700;
+  color: var(--sw-v3-ink);
+  margin: 0 0 var(--sw-space-1);
+}
+.sw-action-duration {
+  font-size: var(--sw-text-caption);
+  color: var(--sw-v3-ink-soft);
+  margin: 0;
+}
+.sw-action-btn {
+  flex: none;
+  border: none;
+  border-radius: var(--sw-radius-sm);
+  padding: 10px 18px;
+  background: var(--sw-primary);
+  color: var(--sw-primary-text);
+  font: inherit;
+  font-size: var(--sw-text-caption);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* WellnessGrid/WellnessAreaCard — «6 сфер заботы о себе» (п.12/13 брифа). Без статусов —
+   намеренно, см. коммент в WellnessGrid.tsx. */
+.sw-wellness-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sw-space-3);
+}
+.sw-wellness-card {
+  background: var(--sw-v3-surface);
+  border: 1px solid var(--sw-v3-border);
+  border-radius: var(--sw-radius-md);
+  padding: var(--sw-space-4) var(--sw-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sw-space-2);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.sw-wellness-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--sw-radius-sm);
+  background: var(--sw-primary-soft);
+  color: var(--sw-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sw-wellness-title {
+  font-size: var(--sw-text-card-title);
+  font-weight: 700;
+  color: var(--sw-v3-ink);
+  line-height: 1.25;
+}
+.sw-wellness-desc {
+  font-size: var(--sw-text-caption);
+  color: var(--sw-v3-ink-soft);
+  line-height: 1.4;
+  flex: 1;
+}
+.sw-wellness-chevron {
+  align-self: flex-end;
+  color: var(--sw-v3-ink-soft);
+}
+
+/* Второстепенный вход в «Запись к врачу» (п.13 брифа) — сознательно не конкурирует визуально
+   с основным CTA чек-ина: без заливки, только тонкая рамка. */
+.sw-support-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: var(--sw-space-5);
+  padding: var(--sw-space-3) var(--sw-space-4);
+  background: none;
+  border: 1px solid var(--sw-v3-border);
+  border-radius: var(--sw-radius-md);
+  font: inherit;
+  cursor: pointer;
+}
+.sw-support-text {
+  font-size: var(--sw-text-caption);
+  color: var(--sw-v3-ink-soft);
+}
+.sw-support-cta {
+  font-size: var(--sw-text-caption);
+  font-weight: 700;
+  color: var(--sw-primary);
+}
