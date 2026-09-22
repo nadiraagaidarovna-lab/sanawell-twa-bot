@@ -15,6 +15,9 @@ import {
   mountThemeParamsSync,
   mountViewport,
   retrieveRawInitData,
+  setMiniAppBackgroundColor,
+  setMiniAppHeaderColor,
+  setMiniAppBottomBarColor,
 } from '@telegram-apps/sdk';
 
 // Тестовые launch params для разработки вне Telegram. По умолчанию hash заведомо невалиден
@@ -75,6 +78,13 @@ export function bootstrapTelegram(): void {
 
   mountThemeParamsSync();
   bindThemeParamsCssVars();
+
+  // Match native Mini App surfaces to SanaWell without changing Telegram theme data.
+  if (setMiniAppBackgroundColor.isAvailable()) setMiniAppBackgroundColor('#fbf7f2');
+  if (setMiniAppHeaderColor.isAvailable() && setMiniAppHeaderColor.supports.rgb()) {
+    setMiniAppHeaderColor('#fbf7f2');
+  }
+  if (setMiniAppBottomBarColor.isAvailable()) setMiniAppBottomBarColor('#fbf7f2');
 
   mountViewport()
     .then(() => {

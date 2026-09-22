@@ -8,7 +8,7 @@ import {
   setMainButtonParams,
 } from '@telegram-apps/sdk';
 
-const MAIN_BUTTON_BG = '#c1613f';
+const MAIN_BUTTON_BG = '#3f7563';
 const MAIN_BUTTON_TEXT = '#ffffff';
 
 interface MainButtonOptions {
@@ -38,10 +38,7 @@ export function useMainButton({
       mountMainButton();
     }
     if (setMainButtonParams.isAvailable()) {
-      // Цвет задаём сами, а не оставляем теме Telegram: иначе кнопка «Начать»/«Продолжить»
-      // и др. рисуется системным (часто синим) цветом и выбивается из терракотовой гаммы
-      // приложения. #c1613f — тот же терракотовый, что --sw-terracotta/--v2-terracotta
-      // (светлая тема); размер нативной кнопки приложение менять не может.
+      // Keep the native action in the SanaWell sage palette, independently of Telegram theme.
       setMainButtonParams({
         text,
         isVisible: true,
