@@ -114,7 +114,7 @@ export default function HomeScreen({ onCheckinSaved }: { onCheckinSaved: (checki
       <button type="button" className="sw-cta-primary"
         aria-expanded={checkinOpen} aria-controls="home-checkin"
         onClick={() => setCheckinOpen((open) => !open)}>
-        Отметить самочувствие
+        {todayCheckin ? 'Посмотреть сегодняшнюю отметку' : 'Отметить самочувствие'}
       </button>
       {checkinOpen && (
         <div className="sw-checkin-inline" id="home-checkin">
