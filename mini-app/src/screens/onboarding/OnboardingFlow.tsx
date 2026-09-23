@@ -50,7 +50,7 @@ function Options({ name, options, value, onChange, disabled }: {
 }
 
 /** Authenticated per-step persistence; production routing remains separate. */
-export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void }) {
+export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void | Promise<void> }) {
   const [step, setStep] = useState(0);
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
@@ -64,6 +64,9 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
   const [answerError, setAnswerError] = useState('');
   const answerInFlight = useRef(false);
   const savedAnswers = useRef({ cycleSituation: '', mhtStatus: '' });
+  const [finishing, setFinishing] = useState(false);
+  const [completionError, setCompletionError] = useState('');
+  const completionInFlight = useRef(false);
   const [savingConsent, setSavingConsent] = useState(false);
   const [consentError, setConsentError] = useState('');
   const consentInFlight = useRef(false);
@@ -118,7 +121,7 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
   const enabled = step === 1 ? terms && privacy : step === 2 ? !invalidAge && profileStatus === 'ready' && !savingProfile : step === 3 || step === 4 ? answersStatus === 'ready' && !savingAnswer && !!(step === 3 ? cycle : hrt) : true;
   const back = () => { setAnswerError(''); setStep((value) => Math.max(0, value - 1)); };
   const next = async () => {
-    if (!enabled || consentInFlight.current || profileInFlight.current || answerInFlight.current) return;
+    if (!enabled || consentInFlight.current || profileInFlight.current || answerInFlight.current || completionInFlight.current) return;
     if (step === 1) {
       consentInFlight.current = true;
       setSavingConsent(true);
@@ -211,11 +214,23 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
       }
       return;
     }
-    if (step === 5) onCheckin(); else setStep(step + 1);
+    if (step === 5) {
+      completionInFlight.current = true;
+      setFinishing(true);
+      setCompletionError('');
+      try {
+        await onCheckin();
+      } catch {
+        setCompletionError('Не удалось завершить сохранение. Попробуйте ещё раз.');
+      } finally {
+        completionInFlight.current = false;
+        setFinishing(false);
+      }
+    } else setStep(step + 1);
   };
   const cta = step === 0 ? 'Начать мою историю 360°' : step === 5 ? 'Отметить самочувствие →' : 'Продолжить';
 
-  useBackButton(step > 0 ? () => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current) back(); } : null);
+  useBackButton(step > 0 ? () => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current && !completionInFlight.current) back(); } : null);
   useMainButton({ text: cta, onClick: next, isVisible: false });
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
@@ -224,7 +239,7 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
 
   return <main className="sw-onboarding" lang="ru">
     <header className="sw-onboarding-header">
-      {step > 0 ? <button type="button" className="sw-onboarding-back" disabled={savingConsent || savingProfile || savingAnswer} onClick={() => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current) back(); }}>← Назад</button> : <span />}
+      {step > 0 ? <button type="button" className="sw-onboarding-back" disabled={savingConsent || savingProfile || savingAnswer || finishing} onClick={() => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current && !completionInFlight.current) back(); }}>← Назад</button> : <span />}
       <span aria-label={`Шаг ${step + 1} из 6`}>{step + 1}/6</span>
     </header>
     <div className="sw-onboarding-progress" aria-hidden="true">
@@ -287,8 +302,9 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
       {step === 5 && <>
         <p>Теперь просто расскажите, как вы сегодня.<br />Это займёт меньше минуты.</p>
         <div className="sw-onboarding-note"><p>Ваши отметки будут складываться в личную историю.</p><p>Со временем вы сможете видеть, что меняется именно у вас.</p></div>
+        {completionError && <p role="alert">{completionError}</p>}
       </>}
     </section>
-    <footer className="sw-onboarding-footer"><button type="button" className="sw-onboarding-primary" disabled={!enabled || savingConsent} aria-busy={savingConsent || savingProfile || savingAnswer} onClick={next}>{savingConsent || savingProfile || savingAnswer ? 'Сохраняем…' : cta}</button></footer>
+    <footer className="sw-onboarding-footer"><button type="button" className="sw-onboarding-primary" disabled={!enabled || savingConsent || finishing} aria-busy={savingConsent || savingProfile || savingAnswer || finishing} onClick={next}>{savingConsent || savingProfile || savingAnswer || finishing ? 'Сохраняем…' : cta}</button></footer>
   </main>;
 }

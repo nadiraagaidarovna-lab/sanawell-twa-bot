@@ -7,6 +7,7 @@ import { createContext } from 'react';
 // (ТЗ 4.4.1): 'guide'/'body'/'ai-assistant'/'cabinet' — новые пункты сетки папок/нижней
 // навигации главного экрана v2.
 export type ScreenId =
+  | 'onboarding-focus-group'
   | 'welcome'
   | 'consent'
   | 'anketa-name'
@@ -33,6 +34,7 @@ export interface NavigationContextValue {
   screen: ScreenId;
   canGoBack: boolean;
   push: (screen: ScreenId) => void;
+  reset: (screen: ScreenId) => void;
   back: () => void;
 }
 

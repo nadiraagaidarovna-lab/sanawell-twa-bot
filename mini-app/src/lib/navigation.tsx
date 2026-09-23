@@ -24,14 +24,19 @@ export function NavigationProvider({
     setStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
   }, []);
 
+  const reset = useCallback((screen: ScreenId) => {
+    setStack([screen]);
+  }, []);
+
   const value = useMemo<NavigationContextValue>(
     () => ({
       screen: stack[stack.length - 1],
       canGoBack: stack.length > 1,
       push,
+      reset,
       back,
     }),
-    [stack, push, back],
+    [stack, push, back, reset],
   );
 
   return <NavigationContext.Provider value={value}>{children}</NavigationContext.Provider>;

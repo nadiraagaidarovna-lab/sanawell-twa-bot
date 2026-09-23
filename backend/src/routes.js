@@ -34,6 +34,9 @@ function asyncHandler(fn) {
 
 function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   const router = express.Router();
+  // Explicit, server-only focus-group allowlist. Empty/unset means nobody is opted in.
+  const onboardingTesters = new Set((process.env.ONBOARDING_TESTER_IDS || '')
+    .split(',').map(id => id.trim()).filter(id => /^[1-9]\d*$/.test(id)));
 
   // Состояние пользователя при открытии Web App: выбран ли путь менопаузы, даны ли оба
   // обязательных согласия (раздел 13 ТЗ), пройден ли онбординг целиком. onboarded требует
@@ -54,6 +57,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
       );
       res.json({
         onboarded,
+        newOnboardingTester: onboardingTesters.has(String(req.telegramId)),
         language: user ? user.language : null,
         reminderOptIn: !!(user && user.reminder_opt_in),
         habitsReminderOptIn: !!(user && user.habits_reminder_opt_in),

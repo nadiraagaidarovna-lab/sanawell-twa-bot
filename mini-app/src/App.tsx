@@ -17,6 +17,8 @@ import { NavigationProvider } from './lib/navigation';
 import { useNavigation } from './lib/useNavigation';
 import { useBackButton } from './lib/useBackButton';
 import { apiFetch } from './lib/api';
+import { completeFocusGroupOnboarding, requestedFocusGroupOnboarding } from './lib/onboardingFocusGroup';
+import OnboardingFlow from './screens/onboarding/OnboardingFlow';
 import { getTelegramLanguageCode } from './lib/telegram';
 import WelcomeScreen from './screens/WelcomeScreen';
 import ConsentScreen from './screens/ConsentScreen';
@@ -43,6 +45,7 @@ import type { ScreenId } from './lib/navigationContext';
 import type { Lang } from './content/anketa';
 
 interface MeGateResponse {
+  newOnboardingTester?: boolean;
   onboardingWelcomeSeen: boolean;
   onboardingAnketaCompleted: boolean;
   dataStorageConsented: boolean;
@@ -156,7 +159,7 @@ function Screens({
   welcomeNextScreen: ScreenId;
   consentNextScreen: ScreenId;
 }) {
-  const { screen, canGoBack, back, push } = useNavigation();
+  const { screen, canGoBack, back, push, reset } = useNavigation();
   // Один язык на всю анкету, не по экрану — переключение на любом шаге должно быть видно
   // на всех остальных, если вернуться назад, та же логика, что уже была бы у одного
   // многошагового экрана, просто анкета физически разбита на отдельные ScreenId. Экран
@@ -181,6 +184,13 @@ function Screens({
   }
 
   switch (screen) {
+    case 'onboarding-focus-group':
+      return <OnboardingFlow onCheckin={async () => {
+        await completeFocusGroupOnboarding();
+        // Remove the entire onboarding history. Back from Check-in leads to Home.
+        reset('home');
+        push('checkin');
+      }} />;
     case 'consent':
       return (
         <ConsentScreen lang={anketaLang} onLangChange={setAnketaLang} onNext={() => push(consentNextScreen)} />
@@ -235,7 +245,10 @@ function App() {
 
         const consentNextScreen: ScreenId = afterConsentScreen(me);
         const welcomeNextScreen: ScreenId = needsConsent(me) ? 'consent' : consentNextScreen;
-        const initialScreen: ScreenId = !me.onboardingWelcomeSeen ? 'welcome' : welcomeNextScreen;
+        const testerOptIn = me.newOnboardingTester === true &&
+          me.onboardingAnketaCompleted === false && requestedFocusGroupOnboarding();
+        const initialScreen: ScreenId = testerOptIn ? 'onboarding-focus-group' :
+          !me.onboardingWelcomeSeen ? 'welcome' : welcomeNextScreen;
 
         setGate({
           status: 'ready',
