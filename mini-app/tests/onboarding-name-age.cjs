@@ -8,7 +8,7 @@ const base = process.env.ONBOARDING_TEST_BASE_URL || 'http://127.0.0.1:5175/chec
  for (const scenario of ['new','existing','blank-preserves','name-fails','age-fails','load-fails','duplicate','validation','empty']) {
   const page = await browser.newPage(); const writes=[]; let reads=0,failed=false,release,started;
   const barrier=new Promise(r=>release=r); const waiting=new Promise(r=>started=r);
-  const record={medicalDisclaimerConsented:true,dataStorageConsented:true,displayName:['existing','blank-preserves'].includes(scenario)?'Сохранённое имя':null,age:['existing','blank-preserves'].includes(scenario)?49:null,email:'unchanged@example.test',phone:'+77000000000'};
+  const record={medicalDisclaimerConsented:true,dataStorageConsented:true,displayName:['existing','blank-preserves'].includes(scenario)?'Сохранённое имя':null,age:['existing','blank-preserves'].includes(scenario)?49:null,email:'unchanged@example.test',phone:'+77000000000',cycleSituation:null,mhtStatus:null};
   await page.route('**/api/**',async route=>{
    const path=new URL(route.request().url()).pathname;
    if(path==='/api/me') {

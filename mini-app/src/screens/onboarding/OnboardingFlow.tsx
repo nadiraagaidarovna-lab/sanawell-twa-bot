@@ -10,8 +10,8 @@ import './OnboardingFlow.css';
 const CYCLE_OPTIONS = [
   ['regular', 'Мой цикл пока регулярный', 'Но я уже замечаю изменения в самочувствии.'],
   ['changing', 'Мой цикл стал меняться', 'Менструации приходят иначе, чем раньше.'],
-  ['absent_12_months', 'Менструаций нет уже 12 месяцев или дольше', ''],
-  ['after_surgery', 'Менструаций нет после операции', ''],
+  ['no_period_12m', 'Менструаций нет уже 12 месяцев или дольше', ''],
+  ['post_surgery', 'Менструаций нет после операции', ''],
   ['treatment_affected', 'На цикл повлияло лечение или препараты', ''],
   ['other', 'У меня другая ситуация', ''],
   ['unsure', 'Я не знаю / не уверена', ''],
@@ -21,8 +21,8 @@ const HRT_OPTIONS = [
   ['current', 'Да, принимаю сейчас', ''],
   ['no', 'Нет', ''],
   ['considering', 'Обсуждаю с врачом / планирую', ''],
-  ['past', 'Принимала раньше', ''],
-  ['prefer_not_to_answer', 'Не хочу отвечать', ''],
+  ['previous', 'Принимала раньше', ''],
+  ['prefer_not_to_say', 'Не хочу отвечать', ''],
 ] as const;
 
 const TITLES = [
@@ -34,13 +34,14 @@ const TITLES = [
   'Начнём вашу историю 360°',
 ];
 
-function Options({ name, options, value, onChange }: {
+function Options({ name, options, value, onChange, disabled }: {
   name: string;
   options: readonly (readonly [string, string, string])[];
   value: string;
   onChange: (value: string) => void;
+  disabled: boolean;
 }) {
-  return <fieldset className="sw-onboarding-options" aria-labelledby="onboarding-title">
+  return <fieldset className="sw-onboarding-options" aria-labelledby="onboarding-title" disabled={disabled}>
     {options.map(([key, label, hint]) => <label className="sw-onboarding-option" key={key}>
       <input type="radio" name={name} value={key} checked={value === key} onChange={() => onChange(key)} />
       <span>{label}{hint && <span className="sw-onboarding-option-hint">{hint}</span>}</span>
@@ -48,9 +49,7 @@ function Options({ name, options, value, onChange }: {
   </fieldset>;
 }
 
-/** Consent and name/age use existing authenticated storage. Other answers remain
- * in memory until lossless cycle/HRT persistence and production routing are available.
- */
+/** Authenticated per-step persistence; production routing remains separate. */
 export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void }) {
   const [step, setStep] = useState(0);
   const [terms, setTerms] = useState(false);
@@ -60,6 +59,11 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
   const [ageTouched, setAgeTouched] = useState(false);
   const [cycle, setCycle] = useState('');
   const [hrt, setHrt] = useState('');
+  const [answersStatus, setAnswersStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [savingAnswer, setSavingAnswer] = useState(false);
+  const [answerError, setAnswerError] = useState('');
+  const answerInFlight = useRef(false);
+  const savedAnswers = useRef({ cycleSituation: '', mhtStatus: '' });
   const [savingConsent, setSavingConsent] = useState(false);
   const [consentError, setConsentError] = useState('');
   const consentInFlight = useRef(false);
@@ -91,12 +95,30 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
       });
     return () => { cancelled = true; };
   }, [step, profileStatus]);
+  useEffect(() => {
+    if ((step !== 3 && step !== 4) || answersStatus !== 'loading') return;
+    let cancelled = false;
+    apiFetch<{ cycleSituation: string | null; mhtStatus: string | null }>('/me')
+      .then((me) => {
+        if (cancelled) return;
+        if ((me.cycleSituation !== null && !CYCLE_OPTIONS.some(([key]) => key === me.cycleSituation)) ||
+          (me.mhtStatus !== null && !HRT_OPTIONS.some(([key]) => key === me.mhtStatus))) {
+          throw new Error('Answers unavailable');
+        }
+        savedAnswers.current = { cycleSituation: me.cycleSituation ?? '', mhtStatus: me.mhtStatus ?? '' };
+        setCycle(savedAnswers.current.cycleSituation);
+        setHrt(savedAnswers.current.mhtStatus);
+        setAnswersStatus('ready');
+      })
+      .catch(() => { if (!cancelled) setAnswersStatus('error'); });
+    return () => { cancelled = true; };
+  }, [step, answersStatus]);
   // Match the existing age endpoint; no 40+ restriction and no age categories.
   const invalidAge = age !== '' && (!/^\d+$/.test(age) || Number(age) < 18 || Number(age) > 100);
-  const enabled = step === 1 ? terms && privacy : step === 2 ? !invalidAge && profileStatus === 'ready' && !savingProfile : step === 3 ? !!cycle : step === 4 ? !!hrt : true;
-  const back = () => setStep((value) => Math.max(0, value - 1));
+  const enabled = step === 1 ? terms && privacy : step === 2 ? !invalidAge && profileStatus === 'ready' && !savingProfile : step === 3 || step === 4 ? answersStatus === 'ready' && !savingAnswer && !!(step === 3 ? cycle : hrt) : true;
+  const back = () => { setAnswerError(''); setStep((value) => Math.max(0, value - 1)); };
   const next = async () => {
-    if (!enabled || consentInFlight.current || profileInFlight.current) return;
+    if (!enabled || consentInFlight.current || profileInFlight.current || answerInFlight.current) return;
     if (step === 1) {
       consentInFlight.current = true;
       setSavingConsent(true);
@@ -163,11 +185,37 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
       }
       return;
     }
+    if (step === 3 || step === 4) {
+      answerInFlight.current = true;
+      setSavingAnswer(true);
+      setAnswerError('');
+      const field = step === 3 ? 'cycleSituation' : 'mhtStatus';
+      const value = step === 3 ? cycle : hrt;
+      try {
+        if (savedAnswers.current[field] !== value) {
+          const result = await apiFetch<{ ok: boolean }>(step === 3 ? '/anketa/cycle-situation' : '/anketa/mht-status', {
+            method: 'POST', body: JSON.stringify({ [field]: value }),
+          });
+          if (result.ok !== true) throw new Error('Answer save not confirmed');
+          savedAnswers.current[field] = value;
+        }
+        setStep(step + 1);
+      } catch {
+        // A write may have succeeded even if its response was lost. Do not skip
+        // a retry based on an older cached value, including a reselected answer.
+        savedAnswers.current[field] = '';
+        setAnswerError('Не удалось сохранить. Попробуйте ещё раз.');
+      } finally {
+        answerInFlight.current = false;
+        setSavingAnswer(false);
+      }
+      return;
+    }
     if (step === 5) onCheckin(); else setStep(step + 1);
   };
   const cta = step === 0 ? 'Начать мою историю 360°' : step === 5 ? 'Отметить самочувствие →' : 'Продолжить';
 
-  useBackButton(step > 0 ? () => { if (!consentInFlight.current && !profileInFlight.current) back(); } : null);
+  useBackButton(step > 0 ? () => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current) back(); } : null);
   useMainButton({ text: cta, onClick: next, isVisible: false });
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
@@ -176,7 +224,7 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
 
   return <main className="sw-onboarding" lang="ru">
     <header className="sw-onboarding-header">
-      {step > 0 ? <button type="button" className="sw-onboarding-back" disabled={savingConsent || savingProfile} onClick={() => { if (!consentInFlight.current && !profileInFlight.current) back(); }}>← Назад</button> : <span />}
+      {step > 0 ? <button type="button" className="sw-onboarding-back" disabled={savingConsent || savingProfile || savingAnswer} onClick={() => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current) back(); }}>← Назад</button> : <span />}
       <span aria-label={`Шаг ${step + 1} из 6`}>{step + 1}/6</span>
     </header>
     <div className="sw-onboarding-progress" aria-hidden="true">
@@ -225,17 +273,22 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
       </>}
       {step === 3 && <>
         <p>Что сейчас больше похоже на вашу ситуацию?<br />Выберите ближайший вариант — здесь нет правильного или неправильного ответа.</p>
-        <Options name="cycle" options={CYCLE_OPTIONS} value={cycle} onChange={setCycle} />
+        <Options name="cycle" options={CYCLE_OPTIONS} value={cycle} onChange={setCycle} disabled={answersStatus !== 'ready' || savingAnswer} />
       </>}
       {step === 4 && <>
         <p>Это поможет вашему дневнику лучше отражать вашу историю.<br />Мы не оцениваем и не корректируем назначенную терапию.</p>
-        <Options name="hrt" options={HRT_OPTIONS} value={hrt} onChange={setHrt} />
+        <Options name="hrt" options={HRT_OPTIONS} value={hrt} onChange={setHrt} disabled={answersStatus !== 'ready' || savingAnswer} />
+      </>}
+      {(step === 3 || step === 4) && <>
+        {(answersStatus === 'loading' || savingAnswer) && <p role="status">{savingAnswer ? 'Сохраняем…' : 'Загружаем ваши данные…'}</p>}
+        {answersStatus === 'error' && <><p role="alert">Не удалось загрузить ваши данные. Попробуйте ещё раз.</p><button type="button" className="sw-onboarding-link" onClick={() => setAnswersStatus('loading')}>Повторить загрузку</button></>}
+        {answerError && <p role="alert">{answerError}</p>}
       </>}
       {step === 5 && <>
         <p>Теперь просто расскажите, как вы сегодня.<br />Это займёт меньше минуты.</p>
         <div className="sw-onboarding-note"><p>Ваши отметки будут складываться в личную историю.</p><p>Со временем вы сможете видеть, что меняется именно у вас.</p></div>
       </>}
     </section>
-    <footer className="sw-onboarding-footer"><button type="button" className="sw-onboarding-primary" disabled={!enabled || savingConsent} aria-busy={savingConsent || savingProfile} onClick={next}>{savingConsent || savingProfile ? 'Сохраняем…' : cta}</button></footer>
+    <footer className="sw-onboarding-footer"><button type="button" className="sw-onboarding-primary" disabled={!enabled || savingConsent} aria-busy={savingConsent || savingProfile || savingAnswer} onClick={next}>{savingConsent || savingProfile || savingAnswer ? 'Сохраняем…' : cta}</button></footer>
   </main>;
 }

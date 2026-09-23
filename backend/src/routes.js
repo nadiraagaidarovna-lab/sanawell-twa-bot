@@ -79,6 +79,9 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         // Срез Д, Промпт 5/5 (часть 2) — «Личный кабинет»: профиль и статус запроса на
         // удаление. Тарифа здесь нет намеренно — колонки в БД нет, экран хардкодит Basic.
         age: user ? user.age : null,
+        // SELECT * remains compatible before the separate additive migration.
+        cycleSituation: user?.cycle_situation ?? null,
+        mhtStatus: user?.mht_status ?? null,
         email: user ? user.email : null,
         phone: user ? user.phone : null,
         accountDeleted: !!(user && user.deleted_at),
@@ -239,6 +242,25 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
       res.json({ ok: true });
     })
   );
+
+  // Dedicated writes only: no profile replacement or stage/path interpretation.
+  for (const [path, field, values, save] of [
+    ['/anketa/cycle-situation', 'cycleSituation', db.CYCLE_SITUATIONS, db.setCycleSituation],
+    ['/anketa/mht-status', 'mhtStatus', db.MHT_STATUSES, db.setMhtStatus],
+  ]) {
+    router.post(path, requireAuth, asyncHandler(async (req, res) => {
+      const value = req.body?.[field];
+      if (!values.includes(value)) return res.status(400).json({ error: 'invalid_' + field });
+      try {
+        await save(req.telegramId, value);
+      } catch (error) {
+        // A missing explicit migration must not break existing app functionality.
+        if (error.code === '42703') return res.status(503).json({ error: 'onboarding_storage_unavailable' });
+        throw error;
+      }
+      res.json({ ok: true });
+    }));
+  }
 
   // Шаг 3 — самоощущаемый этап (субъективная самооценка, не диагностический вывод
   // приложения — раздел 9.2 ТЗ).

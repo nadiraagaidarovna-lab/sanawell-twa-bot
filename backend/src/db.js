@@ -328,6 +328,29 @@ async function setSelfPerceivedStage(telegramId, stage) {
   ]);
 }
 
+// Independent self-reported answers; never update stage/path or onboarding gates.
+// Schema is installed explicitly via backend/migrations, not at startup.
+const CYCLE_SITUATIONS = ['regular', 'changing', 'no_period_12m', 'post_surgery', 'treatment_affected', 'other', 'unsure'];
+const MHT_STATUSES = ['current', 'no', 'considering', 'previous', 'prefer_not_to_say'];
+
+async function setCycleSituation(telegramId, value) {
+  if (!CYCLE_SITUATIONS.includes(value)) throw new Error('invalid_cycle_situation');
+  await pool.query(
+    `INSERT INTO users (telegram_id, cycle_situation) VALUES ($1, $2)
+     ON CONFLICT (telegram_id) DO UPDATE SET cycle_situation = EXCLUDED.cycle_situation`,
+    [String(telegramId), value]
+  );
+}
+
+async function setMhtStatus(telegramId, value) {
+  if (!MHT_STATUSES.includes(value)) throw new Error('invalid_mht_status');
+  await pool.query(
+    `INSERT INTO users (telegram_id, mht_status) VALUES ($1, $2)
+     ON CONFLICT (telegram_id) DO UPDATE SET mht_status = EXCLUDED.mht_status`,
+    [String(telegramId), value]
+  );
+}
+
 // Свободный текст, не enum: один из вариантов шага 5 ("Своё") — открытое поле, см. коммент
 // у схемы в initSchema().
 // Известные ключи предустановленных вариантов цели (STEP5_GOAL в mini-app/src/content/anketa.ts,
@@ -607,6 +630,10 @@ async function logPartnerClick(partnerId, telegramId) {
 }
 
 module.exports = {
+  CYCLE_SITUATIONS,
+  MHT_STATUSES,
+  setCycleSituation,
+  setMhtStatus,
   initSchema,
   getUser,
   setUserLanguage,
