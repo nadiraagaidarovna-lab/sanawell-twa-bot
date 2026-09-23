@@ -12,7 +12,7 @@ export default function OnboardingPreview() {
   const [progress, setProgress] = useState(false);
   return <NavigationProvider initialScreen="checkin">
     <aside style={{ padding: '12px 20px', fontSize: 16, background: 'var(--sw-primary-soft)' }}>
-      Предпросмотр: согласия сохраняются в вашем аккаунте. Остальные ответы онбординга не сохраняются. Юридические документы — проекты для MVP.
+      Предпросмотр: согласия, имя и возраст сохраняются в вашем аккаунте. Ответы о цикле и МГТ/ГЗТ не сохраняются. Юридические документы — проекты для MVP.
       {checkin && ' Далее — существующий Check-in; его сохранение требует действующей авторизации и API.'}
     </aside>
     {progress ? <><button type="button" onClick={() => setProgress(false)}>← Вернуться к результату</button><ProgressScreen /></>

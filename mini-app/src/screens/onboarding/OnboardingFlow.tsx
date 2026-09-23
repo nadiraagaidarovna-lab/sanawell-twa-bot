@@ -48,7 +48,7 @@ function Options({ name, options, value, onChange }: {
   </fieldset>;
 }
 
-/** Consent uses existing authenticated storage. All other onboarding answers remain
+/** Consent and name/age use existing authenticated storage. Other answers remain
  * in memory until lossless cycle/HRT persistence and production routing are available.
  */
 export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void }) {
@@ -63,13 +63,40 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
   const [savingConsent, setSavingConsent] = useState(false);
   const [consentError, setConsentError] = useState('');
   const consentInFlight = useRef(false);
+  const [profileStatus, setProfileStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+  const profileInFlight = useRef(false);
+  const savedProfile = useRef<{ displayName: string | null; age: number | null }>({ displayName: null, age: null });
+  const profileBusy = step === 2 && (profileStatus === 'loading' || savingProfile);
   const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (step !== 2 || profileStatus !== 'loading') return;
+    let cancelled = false;
+    apiFetch<{ displayName: string | null; age: number | null }>('/me')
+      .then((me) => {
+        if (cancelled) return;
+        if ((me.displayName !== null && typeof me.displayName !== 'string') ||
+          (me.age !== null && (!Number.isInteger(me.age) || me.age < 18 || me.age > 100))) {
+          throw new Error('Profile unavailable');
+        }
+        savedProfile.current = { displayName: me.displayName, age: me.age };
+        setName((current) => me.displayName ?? current);
+        setAge(me.age === null ? '' : String(me.age));
+        setProfileError('');
+        setProfileStatus('ready');
+      })
+      .catch(() => {
+        if (!cancelled) setProfileStatus('error');
+      });
+    return () => { cancelled = true; };
+  }, [step, profileStatus]);
   // Match the existing age endpoint; no 40+ restriction and no age categories.
   const invalidAge = age !== '' && (!/^\d+$/.test(age) || Number(age) < 18 || Number(age) > 100);
-  const enabled = step === 1 ? terms && privacy : step === 2 ? !invalidAge : step === 3 ? !!cycle : step === 4 ? !!hrt : true;
+  const enabled = step === 1 ? terms && privacy : step === 2 ? !invalidAge && profileStatus === 'ready' && !savingProfile : step === 3 ? !!cycle : step === 4 ? !!hrt : true;
   const back = () => setStep((value) => Math.max(0, value - 1));
   const next = async () => {
-    if (!enabled || consentInFlight.current) return;
+    if (!enabled || consentInFlight.current || profileInFlight.current) return;
     if (step === 1) {
       consentInFlight.current = true;
       setSavingConsent(true);
@@ -103,11 +130,44 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
       }
       return;
     }
+    if (step === 2) {
+      profileInFlight.current = true;
+      setSavingProfile(true);
+      setProfileError('');
+      try {
+        const trimmed = name.trim();
+        // Blank optional inputs preserve stored answers; never use /profile,
+        // which also replaces unrelated email/phone fields.
+        if (trimmed && trimmed !== savedProfile.current.displayName) {
+          const result = await apiFetch<{ ok: boolean }>('/anketa/name', {
+            method: 'POST', body: JSON.stringify({ displayName: trimmed }),
+          });
+          if (result.ok !== true) throw new Error('Name save not confirmed');
+          savedProfile.current.displayName = trimmed;
+        }
+        if (age !== '' && Number(age) !== savedProfile.current.age) {
+          const result = await apiFetch<{ ok: boolean }>('/anketa/age', {
+            method: 'POST', body: JSON.stringify({ age: Number(age) }),
+          });
+          if (result.ok !== true) throw new Error('Age save not confirmed');
+          savedProfile.current.age = Number(age);
+        }
+        setName(savedProfile.current.displayName ?? '');
+        setAge(savedProfile.current.age === null ? '' : String(savedProfile.current.age));
+        setStep(3);
+      } catch {
+        setProfileError('Не удалось сохранить. Попробуйте ещё раз.');
+      } finally {
+        profileInFlight.current = false;
+        setSavingProfile(false);
+      }
+      return;
+    }
     if (step === 5) onCheckin(); else setStep(step + 1);
   };
   const cta = step === 0 ? 'Начать мою историю 360°' : step === 5 ? 'Отметить самочувствие →' : 'Продолжить';
 
-  useBackButton(step > 0 ? () => { if (!consentInFlight.current) back(); } : null);
+  useBackButton(step > 0 ? () => { if (!consentInFlight.current && !profileInFlight.current) back(); } : null);
   useMainButton({ text: cta, onClick: next, isVisible: false });
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
@@ -116,7 +176,7 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
 
   return <main className="sw-onboarding" lang="ru">
     <header className="sw-onboarding-header">
-      {step > 0 ? <button type="button" className="sw-onboarding-back" disabled={savingConsent} onClick={() => { if (!consentInFlight.current) back(); }}>← Назад</button> : <span />}
+      {step > 0 ? <button type="button" className="sw-onboarding-back" disabled={savingConsent || savingProfile} onClick={() => { if (!consentInFlight.current && !profileInFlight.current) back(); }}>← Назад</button> : <span />}
       <span aria-label={`Шаг ${step + 1} из 6`}>{step + 1}/6</span>
     </header>
     <div className="sw-onboarding-progress" aria-hidden="true">
@@ -152,13 +212,16 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
         <p>Это поможет SanaWell сделать вашу историю более личной.</p>
         <div className="sw-onboarding-fields">
           <label htmlFor="onboarding-name">Как к вам обращаться?</label>
-          <input id="onboarding-name" autoComplete="given-name" maxLength={100} placeholder="Надира" value={name} onChange={(event) => setName(event.target.value)} />
+          <input id="onboarding-name" autoComplete="given-name" maxLength={100} placeholder="Надира" value={name} disabled={profileBusy || profileStatus !== 'ready'} onChange={(event) => { if (!profileInFlight.current) setName(event.target.value); }} />
           <label htmlFor="onboarding-age">Сколько вам лет?</label>
           <input id="onboarding-age" type="text" inputMode="numeric" maxLength={3} placeholder="49" value={age}
-            onChange={(event) => setAge(event.target.value)} onBlur={() => setAgeTouched(true)}
+            disabled={profileBusy || profileStatus !== 'ready'} onChange={(event) => { if (!profileInFlight.current) setAge(event.target.value); }} onBlur={() => setAgeTouched(true)}
             aria-invalid={ageTouched && invalidAge} aria-describedby={ageTouched && invalidAge ? 'onboarding-age-error' : undefined} />
           {ageTouched && invalidAge && <p id="onboarding-age-error" role="alert">Введите возраст целым числом от 18 до 100.</p>}
         </div>
+        {profileBusy && <p role="status">{savingProfile ? 'Сохраняем…' : 'Загружаем ваши данные…'}</p>}
+        {profileStatus === 'error' && <><p role="alert">Не удалось загрузить ваши данные. Попробуйте ещё раз.</p><button type="button" className="sw-onboarding-link" onClick={() => setProfileStatus('loading')}>Повторить загрузку</button></>}
+        {profileError && <p role="alert">{profileError}</p>}
       </>}
       {step === 3 && <>
         <p>Что сейчас больше похоже на вашу ситуацию?<br />Выберите ближайший вариант — здесь нет правильного или неправильного ответа.</p>
@@ -173,6 +236,6 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void })
         <div className="sw-onboarding-note"><p>Ваши отметки будут складываться в личную историю.</p><p>Со временем вы сможете видеть, что меняется именно у вас.</p></div>
       </>}
     </section>
-    <footer className="sw-onboarding-footer"><button type="button" className="sw-onboarding-primary" disabled={!enabled || savingConsent} aria-busy={savingConsent} onClick={next}>{savingConsent ? 'Сохраняем…' : cta}</button></footer>
+    <footer className="sw-onboarding-footer"><button type="button" className="sw-onboarding-primary" disabled={!enabled || savingConsent} aria-busy={savingConsent || savingProfile} onClick={next}>{savingConsent || savingProfile ? 'Сохраняем…' : cta}</button></footer>
   </main>;
 }

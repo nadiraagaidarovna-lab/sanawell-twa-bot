@@ -10,7 +10,7 @@ const base = process.env.CONSENT_TEST_BASE_URL || 'http://127.0.0.1:5175/checkin
   try {
     for (const scenario of ['success', 'first-fails', 'second-fails', 'lost-response', 'status-fails', 'invalid-status', 'unconfirmed-save', 'existing', 'partial-existing']) {
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-      const records = { medicalDisclaimerConsented: scenario === 'existing' || scenario === 'partial-existing', dataStorageConsented: scenario === 'existing' };
+      const records = { medicalDisclaimerConsented: scenario === 'existing' || scenario === 'partial-existing', dataStorageConsented: scenario === 'existing', displayName: null, age: null };
       const writes = []; const errors = []; let failed = false; let statusReads = 0;
       page.on('pageerror', error => errors.push(error.message));
       await page.route('**/api/**', async route => {
@@ -83,7 +83,7 @@ const base = process.env.CONSENT_TEST_BASE_URL || 'http://127.0.0.1:5175/checkin
         const path = new URL(route.request().url()).pathname;
         if (path === '/api/me') {
           reads++; started(); await barrier;
-          return route.fulfill({ json: { medicalDisclaimerConsented: false, dataStorageConsented: false } });
+          return route.fulfill({ json: { medicalDisclaimerConsented: false, dataStorageConsented: false, displayName: null, age: null } });
         }
         writes.push(path); return route.fulfill({ json: { ok: true } });
       });
@@ -97,7 +97,9 @@ const base = process.env.CONSENT_TEST_BASE_URL || 'http://127.0.0.1:5175/checkin
       assert(await page.getByRole('button', { name: '← Назад', exact: true }).isDisabled());
       release();
       await page.getByRole('heading', { name: 'Немного о вас', exact: true }).waitFor();
-      assert.equal(reads, 1); assert.deepEqual(writes, ['/api/consent/medical-disclaimer', '/api/consent/data-storage']);
+      // One consent status read, then the Name/Age step hydrates its saved fields.
+      await page.waitForFunction(() => !document.querySelector('#onboarding-name')?.disabled);
+      assert.equal(reads, 2); assert.deepEqual(writes, ['/api/consent/medical-disclaimer', '/api/consent/data-storage']);
       console.log('PASS repeated clicks: one save sequence; checkboxes and back locked');
       await page.close();
     }
