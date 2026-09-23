@@ -21,7 +21,8 @@ import { getTelegramLanguageCode } from './lib/telegram';
 import WelcomeScreen from './screens/WelcomeScreen';
 import ConsentScreen from './screens/ConsentScreen';
 import HomeScreen from './screens/HomeScreen';
-import CheckinScreen from './screens/CheckinScreen';
+import CheckinScreen, { type CheckinRecord } from './screens/CheckinScreen';
+import CheckinResultScreen from './screens/CheckinResultScreen';
 import ProgressScreen from './screens/ProgressScreen';
 import TechniquesScreen from './screens/TechniquesScreen';
 import PartnersScreen from './screens/PartnersScreen';
@@ -162,7 +163,18 @@ function Screens({
   // согласий переиспользует то же состояние языка (тот же непрерывный кусок онбординга).
   const [anketaLang, setAnketaLang] = useState<Lang>(() => resolveInitialLang(savedLanguage));
 
-  useBackButton(canGoBack ? back : null);
+  const [checkinResult, setCheckinResult] = useState<CheckinRecord | null>(null);
+  const closeCheckinResult = () => {
+    setCheckinResult(null);
+    if (screen !== 'home') push('home');
+  };
+
+  useBackButton(checkinResult ? closeCheckinResult : canGoBack ? back : null);
+
+  if (checkinResult) {
+    return <CheckinResultScreen checkin={checkinResult} onDone={closeCheckinResult}
+      onProgress={() => { setCheckinResult(null); push('progress'); }} />;
+  }
 
   if (isAnketaStep(screen)) {
     return <AnketaStepScreen screen={screen} lang={anketaLang} onLangChange={setAnketaLang} />;
@@ -174,7 +186,7 @@ function Screens({
         <ConsentScreen lang={anketaLang} onLangChange={setAnketaLang} onNext={() => push(consentNextScreen)} />
       );
     case 'checkin':
-      return <CheckinScreen />;
+      return <CheckinScreen onSaved={setCheckinResult} />;
     case 'progress':
       return <ProgressScreen />;
     case 'techniques':
@@ -194,7 +206,7 @@ function Screens({
     case 'tariff':
       return <TariffScreen />;
     case 'home':
-      return <HomeScreen />;
+      return <HomeScreen onCheckinSaved={setCheckinResult} />;
     case 'welcome':
     default:
       return <WelcomeScreen savedLanguage={savedLanguage} nextScreen={welcomeNextScreen} />;

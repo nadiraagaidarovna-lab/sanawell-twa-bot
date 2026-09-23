@@ -5,7 +5,7 @@ import { apiFetch } from '../lib/api';
 import { getTelegramFirstName } from '../lib/telegram';
 import logo from '../assets/sanawell-logo.png';
 import BottomNav from '../components/BottomNav';
-import CheckinScreen from './CheckinScreen';
+import CheckinScreen, { type CheckinRecord } from './CheckinScreen';
 import StateCard from '../components/home/StateCard';
 import type { SparklineEntry } from '../components/home/MiniSparkline';
 import InsightCard from '../components/home/InsightCard';
@@ -35,7 +35,7 @@ function timeGreeting(hour: number): string {
   return 'Добрый вечер';
 }
 
-export default function HomeScreen() {
+export default function HomeScreen({ onCheckinSaved }: { onCheckinSaved: (checkin: CheckinRecord) => void }) {
   const { push } = useNavigation();
   const [refreshKey, setRefreshKey] = useState(0);
   const [checkinOpen, setCheckinOpen] = useState(false);
@@ -85,12 +85,13 @@ export default function HomeScreen() {
     return () => { cancelled = true; };
   }, [refreshKey]);
 
-  const handleCheckinSaved = () => {
+  const handleCheckinSaved = (checkin: CheckinRecord) => {
     setCheckinOpen(false);
     setCheckinLoading(true);
     setHistoryLoading(true);
     setReportLoading(true);
     setRefreshKey((n) => n + 1);
+    onCheckinSaved(checkin);
   };
 
   const name = displayName || getTelegramFirstName();

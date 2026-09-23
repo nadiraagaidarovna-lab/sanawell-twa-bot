@@ -16,7 +16,7 @@ import { HOT_FLASHES_LABELS, type HotFlashes } from '../content/checkin';
 import { useMainButton } from '../lib/useMainButton';
 import { apiFetch, ApiError } from '../lib/api';
 
-interface CheckinRecord {
+export interface CheckinRecord {
   sleepScore: number;
   moodScore: number;
   memoryScore: number;
@@ -32,7 +32,7 @@ type SubmitState = 'idle' | 'submitting' | 'error';
 interface CheckinScreenProps {
   embedded?: boolean;
   /** Вызывается после успешной отправки — главный экран обновляет блок «Мой прогресс». */
-  onSaved?: () => void;
+  onSaved?: (checkin: CheckinRecord) => void;
 }
 
 function Shell({ embedded, title, children }: { embedded: boolean; title: string; children: ReactNode }) {
@@ -107,7 +107,7 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
       setSaved(checkin);
       setView('confirmed');
       setSubmitState('idle');
-      onSaved?.();
+      onSaved?.(checkin);
     } catch (e) {
       if (hapticFeedbackNotificationOccurred.isAvailable()) {
         hapticFeedbackNotificationOccurred('error');
