@@ -1,0 +1,29 @@
+.numeric-selector-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(44px, 1fr));
+  gap: 6px;
+}
+.numeric-selector-option {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 2px;
+  border: 1px solid var(--sw-v3-border);
+  border-radius: 10px;
+  background: var(--sw-v3-surface);
+  color: var(--sw-v3-ink);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.numeric-selector-option[aria-pressed="true"] {
+  background: var(--sw-primary);
+  border-color: var(--sw-primary);
+  color: var(--sw-primary-text);
+  font-weight: 800;
+}
+.numeric-selector-option:focus-visible {
+  outline: 2px solid var(--sw-primary);
+  outline-offset: 2px;
+}

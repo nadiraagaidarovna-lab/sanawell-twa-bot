@@ -10,7 +10,7 @@
 // отдельный экран /checkin (папка «Как ты сегодня») работает как раньше.
 import { useEffect, useState, type ReactNode } from 'react';
 import { hapticFeedbackNotificationOccurred } from '@telegram-apps/sdk';
-import ScaleSlider from '../components/ScaleSlider';
+import NumericSelector from '../components/NumericSelector';
 import { useMainButton } from '../lib/useMainButton';
 import { apiFetch, ApiError } from '../lib/api';
 
@@ -159,14 +159,14 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
   return (
     <Shell embedded={embedded} title="Как вы сегодня?">
       <div className="scales">
-        <ScaleSlider label="Сон" hint="пробуждения, бессонница" value={sleep} onChange={setSleep} />
-        <ScaleSlider
+        <NumericSelector label="Сон" hint="пробуждения, бессонница" value={sleep} onChange={setSleep} />
+        <NumericSelector
           label="Настроение"
           hint="тревога, раздражительность"
           value={mood}
           onChange={setMood}
         />
-        <ScaleSlider
+        <NumericSelector
           label="Голова"
           hint="туман, рассеянность"
           value={memory}
