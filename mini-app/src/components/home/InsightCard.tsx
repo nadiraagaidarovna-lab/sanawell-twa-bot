@@ -11,7 +11,7 @@ interface InsightCardProps {
 }
 
 const EMPTY_STATE_TEXT =
-  'Продолжайте отмечать самочувствие — со временем здесь появится ваша личная динамика.';
+  'Продолжайте отмечать самочувствие — здесь появится ваша личная динамика.';
 
 export default function InsightCard({ loading, observationText, onSeeMore }: InsightCardProps) {
   return (
