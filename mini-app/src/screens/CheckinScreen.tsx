@@ -70,6 +70,8 @@ export default function CheckinScreen({ embedded = false, onSaved, onFormActiveC
   const panel = useRef<HTMLDivElement>(null);
   const spacer = useRef<HTMLDivElement>(null);
   const [answered, setAnswered] = useState({ sleep: false, mood: false, memory: false });
+  const unanswered = [!answered.sleep && 'Сон', !answered.mood && 'Настроение', !answered.memory && 'Ясность'].filter(Boolean);
+  const canSave = unanswered.length === 0;
 
   useEffect(() => {
     onFormActiveChange?.(view === 'form');
@@ -136,7 +138,7 @@ export default function CheckinScreen({ embedded = false, onSaved, onFormActiveC
 
   const handleSubmit = async () => {
     // Synchronous guard also covers two taps before React renders the disabled state.
-    if (submitting.current || view !== 'form') return;
+    if (submitting.current || view !== 'form' || !canSave) return;
     submitting.current = true;
     setSubmitState('submitting');
 
@@ -170,6 +172,7 @@ export default function CheckinScreen({ embedded = false, onSaved, onFormActiveC
       setComment(saved.comment ?? '');
       setEnergy(saved.energyScore ?? null);
       setHotFlashes(saved.hot_flashes ?? null);
+      setAnswered({ sleep: true, mood: true, memory: true });
     }
     setView('form');
   };
@@ -177,7 +180,7 @@ export default function CheckinScreen({ embedded = false, onSaved, onFormActiveC
   useMainButton({
     text: 'Отправить',
     onClick: handleSubmit,
-    isEnabled: submitState !== 'submitting',
+    isEnabled: canSave && submitState !== 'submitting',
     isLoaderVisible: submitState === 'submitting',
     isVisible: false,
   });
@@ -214,20 +217,20 @@ export default function CheckinScreen({ embedded = false, onSaved, onFormActiveC
     <Shell embedded={embedded} title="Как вы сегодня?">
       <fieldset className="checkin-fields" disabled={submitState === 'submitting'} aria-label="Ответы Check-in 360°">
       <div className="scales">
-        <NumericSelector label="Сон" hint="пробуждения, бессонница" value={sleep} onChange={(value) => {
+        <NumericSelector label="Сон" hint="пробуждения, бессонница" value={answered.sleep ? sleep : null} onChange={(value) => {
           setSleep(value); setAnswered((prev) => ({ ...prev, sleep: true }));
         }} />
         <NumericSelector label="Энергия" hint="Как вы оцениваете свою энергию сегодня?" value={energy} onChange={setEnergy} />
         <NumericSelector
           label="Настроение"
           hint="тревога, раздражительность"
-          value={mood}
+          value={answered.mood ? mood : null}
           onChange={(value) => { setMood(value); setAnswered((prev) => ({ ...prev, mood: true })); }}
         />
         <NumericSelector
           label="Ясность / концентрация"
           hint="туман, рассеянность"
-          value={memory}
+          value={answered.memory ? memory : null}
           onChange={(value) => { setMemory(value); setAnswered((prev) => ({ ...prev, memory: true })); }}
         />
         <HotFlashesSelector value={hotFlashes} onChange={setHotFlashes} />
@@ -251,11 +254,11 @@ export default function CheckinScreen({ embedded = false, onSaved, onFormActiveC
           <p id="checkin-save-status" role="status" aria-live="polite">
             {submitState === 'error' ? 'Не удалось сохранить. Попробуйте ещё раз'
               : submitState === 'submitting' ? 'Сохраняем ваши ответы'
-              : Object.values(answered).every(Boolean) ? 'Ответы готовы к сохранению'
-              : 'Нажмите, чтобы сохранить ответы'}
+              : canSave ? 'Ответы готовы к сохранению'
+              : `Отметьте, пожалуйста: ${unanswered.join(', ')}.`}
           </p>
           <button type="button" className="checkin-save-button" onClick={handleSubmit}
-            disabled={submitState === 'submitting'} aria-describedby="checkin-save-status"
+            disabled={!canSave || submitState === 'submitting'} aria-describedby="checkin-save-status"
             aria-busy={submitState === 'submitting'}>
             {submitState === 'submitting' && <span className="checkin-save-spinner" aria-hidden="true" />}
             {submitState === 'submitting' ? 'Сохраняем…' : 'Сохранить отметку'}
