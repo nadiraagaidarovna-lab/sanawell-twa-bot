@@ -39,6 +39,7 @@ export default function HomeScreen({ onCheckinSaved }: { onCheckinSaved: (checki
   const { push } = useNavigation();
   const [refreshKey, setRefreshKey] = useState(0);
   const [checkinOpen, setCheckinOpen] = useState(false);
+  const [checkinFormActive, setCheckinFormActive] = useState(false);
   const [checkinLoading, setCheckinLoading] = useState(true);
   const [checkinError, setCheckinError] = useState(false);
   const [todayCheckin, setTodayCheckin] = useState<TodayCheckin | null>(null);
@@ -117,7 +118,7 @@ export default function HomeScreen({ onCheckinSaved }: { onCheckinSaved: (checki
       </button>
       {checkinOpen && (
         <div className="sw-checkin-inline" id="home-checkin">
-          <CheckinScreen embedded onSaved={handleCheckinSaved} />
+          <CheckinScreen embedded onSaved={handleCheckinSaved} onFormActiveChange={setCheckinFormActive} />
         </div>
       )}
 
@@ -130,7 +131,7 @@ export default function HomeScreen({ onCheckinSaved }: { onCheckinSaved: (checki
       <section className="sw-section" aria-label="Сферы заботы о себе">
         <WellnessGrid onNavigate={(screen) => push(screen)} />
       </section>
-      <BottomNav active="home" />
+      {!checkinFormActive && <BottomNav active="home" />}
     </main>
   );
 }

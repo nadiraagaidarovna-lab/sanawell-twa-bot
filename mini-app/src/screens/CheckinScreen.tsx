@@ -5,16 +5,16 @@
 //
 // Режим embedded (срез «чек-ин на главный экран»): тот же экран, но без своей обёртки
 // <main>/заголовка страницы — HomeScreen.tsx вставляет его прямо в главный экран, чтобы
-// чек-ин был виден при открытии приложения, без промежуточного нажатия. Логика (загрузка
-// «уже отправлен сегодня», отправка, «Исправить», MainButton «Отправить») не менялась;
-// отдельный экран /checkin (папка «Как ты сегодня») работает как раньше.
-import { useEffect, useState, type ReactNode } from 'react';
+// загрузка и исправление отметки сохраняют прежнее поведение. На форме закреплённая
+// панель сохранения заменяет нативную MainButton только для Check-in.
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { hapticFeedbackNotificationOccurred } from '@telegram-apps/sdk';
 import NumericSelector from '../components/NumericSelector';
 import HotFlashesSelector from '../components/HotFlashesSelector';
 import { HOT_FLASHES_LABELS, type HotFlashes } from '../content/checkin';
 import { useMainButton } from '../lib/useMainButton';
-import { apiFetch, ApiError } from '../lib/api';
+import { apiFetch } from '../lib/api';
+import './CheckinScreen.css';
 
 export interface CheckinRecord {
   sleepScore: number;
@@ -33,6 +33,7 @@ interface CheckinScreenProps {
   embedded?: boolean;
   /** Вызывается после успешной отправки — главный экран обновляет блок «Мой прогресс». */
   onSaved?: (checkin: CheckinRecord) => void;
+  onFormActiveChange?: (active: boolean) => void;
 }
 
 function Shell({ embedded, title, children }: { embedded: boolean; title: string; children: ReactNode }) {
@@ -53,7 +54,7 @@ function Shell({ embedded, title, children }: { embedded: boolean; title: string
   );
 }
 
-export default function CheckinScreen({ embedded = false, onSaved }: CheckinScreenProps) {
+export default function CheckinScreen({ embedded = false, onSaved, onFormActiveChange }: CheckinScreenProps) {
   const [view, setView] = useState<ViewState>('loading');
   const [saved, setSaved] = useState<CheckinRecord | null>(null);
 
@@ -65,7 +66,48 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
   const [hotFlashes, setHotFlashes] = useState<HotFlashes | null>(null);
 
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const submitting = useRef(false);
+  const panel = useRef<HTMLDivElement>(null);
+  const spacer = useRef<HTMLDivElement>(null);
+  const [answered, setAnswered] = useState({ sleep: false, mood: false, memory: false });
+
+  useEffect(() => {
+    onFormActiveChange?.(view === 'form');
+    return () => onFormActiveChange?.(false);
+  }, [view, onFormActiveChange]);
+
+  useEffect(() => {
+    if (view !== 'form' || !panel.current || !spacer.current) return;
+    const bar = panel.current;
+    const space = spacer.current;
+    const viewport = window.visualViewport;
+    const updateHeight = () => { space.style.height = `${bar.getBoundingClientRect().height + 16}px`; };
+    const updatePosition = () => {
+      const offset = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+      bar.style.setProperty('--checkin-keyboard-offset', `${offset}px`);
+    };
+    const resizeViewport = () => {
+      updatePosition();
+      const focused = document.activeElement;
+      if (focused instanceof HTMLTextAreaElement && space.parentElement?.contains(focused)) {
+        const overlap = focused.getBoundingClientRect().bottom - bar.getBoundingClientRect().top + 16;
+        if (overlap > 0) window.scrollBy(0, overlap);
+      }
+    };
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(bar);
+    updateHeight();
+    updatePosition();
+    viewport?.addEventListener('resize', resizeViewport);
+    viewport?.addEventListener('scroll', updatePosition);
+    window.addEventListener('resize', resizeViewport);
+    return () => {
+      observer.disconnect();
+      viewport?.removeEventListener('resize', resizeViewport);
+      viewport?.removeEventListener('scroll', updatePosition);
+      window.removeEventListener('resize', resizeViewport);
+    };
+  }, [view]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,8 +135,10 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
   }, []);
 
   const handleSubmit = async () => {
+    // Synchronous guard also covers two taps before React renders the disabled state.
+    if (submitting.current || view !== 'form') return;
+    submitting.current = true;
     setSubmitState('submitting');
-    setSubmitError(null);
 
     try {
       const { checkin } = await apiFetch<{ ok: true; checkin: CheckinRecord }>('/checkin', {
@@ -108,12 +152,13 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
       setView('confirmed');
       setSubmitState('idle');
       onSaved?.(checkin);
-    } catch (e) {
+    } catch {
       if (hapticFeedbackNotificationOccurred.isAvailable()) {
         hapticFeedbackNotificationOccurred('error');
       }
       setSubmitState('error');
-      setSubmitError(e instanceof ApiError ? e.message : 'Сеть недоступна');
+    } finally {
+      submitting.current = false;
     }
   };
 
@@ -134,7 +179,7 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
     onClick: handleSubmit,
     isEnabled: submitState !== 'submitting',
     isLoaderVisible: submitState === 'submitting',
-    isVisible: view === 'form',
+    isVisible: false,
   });
 
   if (view === 'loading') {
@@ -167,20 +212,23 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
 
   return (
     <Shell embedded={embedded} title="Как вы сегодня?">
+      <fieldset className="checkin-fields" disabled={submitState === 'submitting'} aria-label="Ответы Check-in 360°">
       <div className="scales">
-        <NumericSelector label="Сон" hint="пробуждения, бессонница" value={sleep} onChange={setSleep} />
+        <NumericSelector label="Сон" hint="пробуждения, бессонница" value={sleep} onChange={(value) => {
+          setSleep(value); setAnswered((prev) => ({ ...prev, sleep: true }));
+        }} />
         <NumericSelector label="Энергия" hint="Как вы оцениваете свою энергию сегодня?" value={energy} onChange={setEnergy} />
         <NumericSelector
           label="Настроение"
           hint="тревога, раздражительность"
           value={mood}
-          onChange={setMood}
+          onChange={(value) => { setMood(value); setAnswered((prev) => ({ ...prev, mood: true })); }}
         />
         <NumericSelector
           label="Ясность / концентрация"
           hint="туман, рассеянность"
           value={memory}
-          onChange={setMemory}
+          onChange={(value) => { setMemory(value); setAnswered((prev) => ({ ...prev, memory: true })); }}
         />
         <HotFlashesSelector value={hotFlashes} onChange={setHotFlashes} />
       </div>
@@ -196,12 +244,24 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
         value={comment}
         onChange={(e) => setComment(e.target.value)}
       />
-
-      {submitState === 'error' && (
-        <p className="body-text" style={{ color: 'var(--sw-terracotta)', fontSize: 13, marginTop: 14 }}>
-          Не удалось сохранить: {submitError}
-        </p>
-      )}
+      </fieldset>
+      <div ref={spacer} aria-hidden="true" />
+      <div ref={panel} className="checkin-save-panel" aria-label="Сохранение отметки">
+        <div className="checkin-save-inner">
+          <p id="checkin-save-status" role="status" aria-live="polite">
+            {submitState === 'error' ? 'Не удалось сохранить. Попробуйте ещё раз'
+              : submitState === 'submitting' ? 'Сохраняем ваши ответы'
+              : Object.values(answered).every(Boolean) ? 'Ответы готовы к сохранению'
+              : 'Нажмите, чтобы сохранить ответы'}
+          </p>
+          <button type="button" className="checkin-save-button" onClick={handleSubmit}
+            disabled={submitState === 'submitting'} aria-describedby="checkin-save-status"
+            aria-busy={submitState === 'submitting'}>
+            {submitState === 'submitting' && <span className="checkin-save-spinner" aria-hidden="true" />}
+            {submitState === 'submitting' ? 'Сохраняем…' : 'Сохранить отметку'}
+          </button>
+        </div>
+      </div>
     </Shell>
   );
 }
