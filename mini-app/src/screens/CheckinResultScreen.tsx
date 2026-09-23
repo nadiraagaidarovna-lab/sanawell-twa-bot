@@ -77,10 +77,12 @@ export default function CheckinResultScreen({ checkin, onDone, onProgress }: Pro
 
       <p className="sw-result-flashes"><span aria-hidden="true">🔥</span> Приливы — <strong>{checkin.hot_flashes === null ? 'Не отмечено' : HOT_FLASHES_LABELS[checkin.hot_flashes]}</strong></p>
 
-      {summary?.daysCount === 1 && <p className="sw-result-first">
-        <strong>Это ваша первая отметка ♡</strong>
-        Продолжайте отмечать самочувствие — со временем здесь появится ваша личная динамика.
-      </p>}
+      <p className="sw-result-first">
+        {summary?.daysCount === 1 && <strong>Это ваша первая отметка ♡</strong>}
+        <strong>Готово на сегодня 🤍</strong>
+        Возвращайтесь завтра и снова отметьте самочувствие.<br />
+        Чем больше ваших отметок, тем понятнее становится ваша личная динамика.
+      </p>
 
       <footer className="sw-result-actions">
         <button type="button" onClick={onDone}>Готово</button>
