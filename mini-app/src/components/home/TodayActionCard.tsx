@@ -1,27 +1,21 @@
-// TodayActionCard.tsx — «Сегодня для вас» (TASK 01, п.11). Одна карточка — первая техника
-// из уже существующего GET /api/checkin/weekly-report; это НЕ новый рекомендательный
-// движок, только сужение существующего списка (до 3 карточек) до одной на главном экране.
-// Формулировка "можно попробовать" вместо императива "нужно сделать" — намеренно.
 interface TodayActionCardProps {
+  loading: boolean;
   title: string;
-  duration: string;
+  duration?: string;
   onStart: () => void;
 }
 
-export default function TodayActionCard({ title, duration, onStart }: TodayActionCardProps) {
+// Reuse one existing weekly recommendation or the existing self-help library.
+// The library fallback is not presented as a personalized recommendation.
+export default function TodayActionCard({ loading, title, duration, onStart }: TodayActionCardProps) {
   return (
-    <section className="sw-section">
-      <h2 className="sw-section-title">Сегодня для вас</h2>
-      <div className="sw-action-card">
-        <div>
-          <p className="sw-action-eyebrow">Можно попробовать сегодня</p>
-          <p className="sw-action-title">{title}</p>
-          <p className="sw-action-duration">{duration}</p>
-        </div>
-        <button type="button" className="sw-action-btn" onClick={onStart}>
-          Начать
-        </button>
+    <section className="sw-section sw-action-card" aria-labelledby="home-action-title">
+      <div>
+        <h2 id="home-action-title" className="sw-action-heading">Сегодня для вас</h2>
+        <p className="sw-action-title">{loading ? 'Загружаю…' : title}</p>
+        {!loading && duration && <p className="sw-action-duration">{duration}</p>}
       </div>
+      {!loading && <button type="button" className="sw-action-btn" onClick={onStart}>Открыть</button>}
     </section>
   );
 }

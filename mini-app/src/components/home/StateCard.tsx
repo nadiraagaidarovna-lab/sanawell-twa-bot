@@ -1,71 +1,32 @@
-// StateCard.tsx — hero-компонент главного экрана v3 (TASK 01, брифинг «REFACTOR THE
-// EXISTING APP», п.7). Показывает нейтральное самоощущение — простое среднее трёх УЖЕ
-// существующих измерений чек-ина (сон/настроение/голова), полученных через существующий
-// GET /api/checkin. Это НЕ "health score": формулировки "Здоровье"/"Индекс здоровья"/
-// "Диагноз"/"Риск" здесь и не должны появляться нигде рядом. Если чек-ина за сегодня ещё
-// нет — пустое состояние с тем же CTA "+ Отметить самочувствие", который открывает уже
-// существующий флоу чек-ина (CheckinScreen.tsx) — сама логика чек-ина здесь не трогается.
-interface TodayCheckin {
-  sleepScore: number;
-  moodScore: number;
-  memoryScore: number;
-}
+import MiniSparkline, { type SparklineEntry } from './MiniSparkline';
 
 interface StateCardProps {
   loading: boolean;
-  checkin: TodayCheckin | null;
-  onOpenCheckin: () => void;
+  error: boolean;
+  checkin: { sleepScore: number; moodScore: number; memoryScore: number } | null;
+  history: SparklineEntry[];
+  historyLoading: boolean;
 }
 
-// Нейтральные бытовые слова — не диагностические категории.
-function stateWord(avg: number): string {
-  if (avg >= 8) return 'Отлично';
-  if (avg >= 6.5) return 'Хорошо';
-  if (avg >= 5) return 'Нормально';
-  if (avg >= 3.5) return 'Непросто';
-  return 'Тяжело';
-}
-
-function formatAverage(avg: number): string {
-  return avg.toFixed(1).replace('.', ',');
-}
-
-export default function StateCard({ loading, checkin, onOpenCheckin }: StateCardProps) {
-  if (loading) {
-    return (
-      <div className="sw-state-card">
-        <p className="sw-state-label">Моё состояние</p>
-        <p className="body-text" style={{ color: 'var(--sw-v3-ink-soft)', margin: 0 }}>
-          Загружаю…
-        </p>
-      </div>
-    );
-  }
-
-  if (!checkin) {
-    return (
-      <div className="sw-state-card">
-        <p className="sw-state-empty-title">Как вы сегодня?</p>
-        <button type="button" className="sw-cta-primary" onClick={onOpenCheckin}>
-          + Отметить самочувствие
-        </button>
-      </div>
-    );
-  }
-
-  const avg = (checkin.sleepScore + checkin.moodScore + checkin.memoryScore) / 3;
-
+// Display the user's actual answers, not a new aggregate or diagnostic score.
+export default function StateCard({ loading, error, checkin, history, historyLoading }: StateCardProps) {
   return (
-    <div className="sw-state-card">
-      <p className="sw-state-label">Моё состояние</p>
-      <div className="sw-state-value-row">
-        <span className="sw-state-value">{formatAverage(avg)}</span>
-        <span className="sw-state-max">/ 10</span>
+    <section className="sw-state-card" aria-labelledby="home-state-title" aria-busy={loading}>
+      <div className="sw-state-heading">
+        <h2 id="home-state-title">Моё состояние</h2>
+        <span className="sw-period">7 дней</span>
       </div>
-      <p className="sw-state-word">{stateWord(avg)}</p>
-      <button type="button" className="sw-cta-primary" onClick={onOpenCheckin}>
-        + Отметить самочувствие
-      </button>
-    </div>
+      {loading ? <p className="sw-state-note">Загружаю…</p> :
+        error ? <p className="sw-state-note">Не удалось загрузить отметку за сегодня.</p> :
+        checkin ? (
+          <dl className="sw-state-values" aria-label="Ваши отметки за сегодня">
+            <div><dt>Сон</dt><dd>{checkin.sleepScore}<span> / 10</span></dd></div>
+            <div><dt>Настроение</dt><dd>{checkin.moodScore}<span> / 10</span></dd></div>
+            <div><dt>Голова</dt><dd>{checkin.memoryScore}<span> / 10</span></dd></div>
+          </dl>
+        ) : <p className="sw-state-note">Сегодня ещё нет отметки.</p>}
+      {historyLoading ? <p className="sw-state-note">Загружаю динамику…</p> :
+        <MiniSparkline entries={history} />}
+    </section>
   );
 }

@@ -41,7 +41,7 @@ export default function MiniSparkline({ entries }: { entries: SparklineEntry[] }
     return (
       <div className="sw-sparkline-card">
         <p className="sw-sparkline-empty">
-          График появится, когда наберётся больше отметок за неделю.
+          Динамика появится после двух отметок за неделю.
         </p>
       </div>
     );
@@ -49,12 +49,13 @@ export default function MiniSparkline({ entries }: { entries: SparklineEntry[] }
 
   return (
     <div className="sw-sparkline-card">
+      <p className="sw-sparkline-caption">Среднее ваших отметок</p>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         width="100%"
         height={HEIGHT}
         role="img"
-        aria-label="Динамика самочувствия за последние дни"
+        aria-label="Среднее ваших отметок сна, настроения и головы за последние 7 дней"
       >
         <path
           d={buildPath(entries)}

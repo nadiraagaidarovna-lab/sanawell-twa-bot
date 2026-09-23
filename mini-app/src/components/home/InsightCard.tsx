@@ -17,7 +17,7 @@ export default function InsightCard({ loading, observationText, onSeeMore }: Ins
   return (
     <section className="sw-section">
       <div className="sw-insight-card">
-        <p className="sw-insight-title">Мы заметили</p>
+        <h2 className="sw-insight-title">Мы заметили</h2>
         <p className="sw-insight-body">{loading ? 'Загружаю…' : (observationText ?? EMPTY_STATE_TEXT)}</p>
         {!loading && (
           <button type="button" className="sw-insight-cta" onClick={onSeeMore}>

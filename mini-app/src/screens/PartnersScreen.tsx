@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { openLink } from '@telegram-apps/sdk';
 import { apiFetch, ApiError } from '../lib/api';
+import BottomNav from '../components/BottomNav';
 
 interface Partner {
   id: number;
@@ -78,7 +79,7 @@ export default function PartnersScreen() {
   })).filter((group) => group.items.length > 0);
 
   return (
-    <main className="screen">
+    <main className="screen sw-support-screen">
       <p className="eyebrow">SanaWell</p>
       <h1>Запись к врачу</h1>
       <p className="body-text">
@@ -131,6 +132,7 @@ export default function PartnersScreen() {
             </div>
           </section>
         ))}
+      <BottomNav active="partners" />
     </main>
   );
 }

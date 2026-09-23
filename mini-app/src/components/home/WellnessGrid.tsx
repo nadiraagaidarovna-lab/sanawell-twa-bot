@@ -70,43 +70,41 @@ interface WellnessArea {
   icon: ReactNode;
 }
 
-// Назначения — прагматичный маппинг на уже существующие 5 точек входа (techniques/guide/
-// body/progress), без удаления и без новых экранов. "Запись к врачу" сюда не входит —
-// она вынесена отдельной второстепенной ссылкой ниже сетки (см. HomeScreen.tsx, п.13).
+// Compact labels map to the existing content destinations; no new data model.
 const AREAS: WellnessArea[] = [
   {
-    title: 'Питание и обмен веществ',
-    description: 'Базовые принципы и техники',
+    title: 'Питание',
+    description: 'Питание и обмен веществ',
     screen: 'techniques',
     icon: <IconApple />,
   },
   {
-    title: 'Движение и сила',
-    description: 'Упражнения для тела 40+',
+    title: 'Движение',
+    description: 'Движение и сила',
     screen: 'body',
     icon: <IconDumbbell />,
   },
   {
-    title: 'Сон и восстановление',
-    description: 'Ваша динамика и техники',
+    title: 'Сон',
+    description: 'Сон и восстановление',
     screen: 'progress',
     icon: <IconMoon />,
   },
   {
-    title: 'Гормональное и интимное здоровье',
-    description: 'О теле и гормонах простыми словами',
+    title: 'Менопауза 360°',
+    description: 'Менопауза 360° — Гормональная и интимная гигиена',
     screen: 'guide',
     icon: <IconHeart />,
   },
   {
-    title: 'Эмоциональное здоровье',
-    description: 'Техники для настроения и стресса',
+    title: 'Эмоции',
+    description: 'Эмоциональное здоровье',
     screen: 'techniques',
     icon: <IconWave />,
   },
   {
-    title: 'Окружение и смысл',
-    description: 'Что помогает, а что мешает',
+    title: 'Окружение',
+    description: 'Окружение и смысл',
     screen: 'guide',
     icon: <IconLeaf />,
   },
