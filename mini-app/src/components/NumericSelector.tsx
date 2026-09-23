@@ -5,7 +5,7 @@ import './NumericSelector.css';
 interface NumericSelectorProps {
   label: string;
   hint: string;
-  value: number;
+  value: number | null;
   onChange: (value: number) => void;
 }
 
@@ -22,7 +22,7 @@ export default function NumericSelector({ label, hint, value, onChange }: Numeri
     <div className="scale numeric-selector">
       <div className="scale-header">
         <span className="scale-label" id={id + '-label'}>{label}</span>
-        <span className="scale-value">{value}</span>
+        <span className="scale-value">{value ?? '—'}</span>
       </div>
       <p className="scale-hint" id={id + '-hint'}>{hint}</p>
       <div className="numeric-selector-grid" role="group"

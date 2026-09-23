@@ -19,6 +19,8 @@ function shapeCheckin(row) {
     moodScore: row.mood_score,
     memoryScore: row.memory_score,
     comment: row.comment,
+    energyScore: row.energy_score ?? null,
+    hot_flashes: row.hot_flashes ?? null,
     canCorrect: Date.now() - createdAt.getTime() < CHECKIN_CORRECTION_WINDOW_MS,
   };
 }
@@ -384,7 +386,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     '/checkin',
     requireAuth,
     asyncHandler(async (req, res) => {
-      const { sleep, mood, memory, comment } = req.body || {};
+      const { sleep, mood, memory, comment, energy, hot_flashes } = req.body || {};
       const scores = { sleep, mood, memory };
 
       const scoresValid = Object.values(scores).every(
@@ -394,6 +396,16 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         return res.status(400).json({ error: 'invalid_payload' });
       }
       if (comment !== undefined && comment !== null && typeof comment !== 'string') {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+
+      // Optional for older clients; explicit null records an unanswered field.
+      if (energy !== undefined && energy !== null &&
+          (!Number.isInteger(energy) || energy < 1 || energy > 10)) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      if (hot_flashes !== undefined && hot_flashes !== null &&
+          !['none', 'mild', 'moderate', 'severe'].includes(hot_flashes)) {
         return res.status(400).json({ error: 'invalid_payload' });
       }
 
@@ -407,6 +419,8 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         mood,
         memory,
         comment: comment ? comment.slice(0, 1000) : null,
+        energy,
+        hot_flashes,
       });
 
       const checkin = await db.getTodayCheckin(req.telegramId);
@@ -429,6 +443,8 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
           moodScore: row.mood_score,
           memoryScore: row.memory_score,
           comment: row.comment,
+          energyScore: row.energy_score ?? null,
+          hot_flashes: row.hot_flashes ?? null,
         })),
       });
     })

@@ -175,6 +175,12 @@ async function initSchema() {
       UNIQUE (telegram_id, checkin_date)
     );
 
+    -- Additive migration: NULL means not recorded, including all historical rows.
+    ALTER TABLE daily_checkins ADD COLUMN IF NOT EXISTS energy_score INTEGER
+      CHECK (energy_score BETWEEN 1 AND 10);
+    ALTER TABLE daily_checkins ADD COLUMN IF NOT EXISTS hot_flashes TEXT
+      CHECK (hot_flashes IN ('none', 'mild', 'moderate', 'severe'));
+
     -- Справочник партнёров (ТЗ 5.6/6.6/10.5) — без интеграции календаря/API, только
     -- карточка + внешняя ссылка. is_placeholder=true до того, как Надира заведёт реальных
     -- партнёров (напрямую в БД, без релиза кода — по замыслу раздела 10.5).
@@ -463,22 +469,25 @@ async function setHabitsReminderOptIn(telegramId, optIn) {
 // Одна запись в день на пользователя — повторная отправка в тот же Алматинский день
 // обновляет ту же строку и помечает её corrected_manually (основа для "Исправить",
 // ТЗ 6.3.4) — естественное следствие upsert по (telegram_id, checkin_date).
-async function upsertDailyCheckin(telegramId, { sleep, mood, memory, comment }) {
+async function upsertDailyCheckin(telegramId, { sleep, mood, memory, comment, energy, hot_flashes }) {
   const date = almatyDateString(new Date());
   const now = new Date().toISOString();
 
   await pool.query(
     `INSERT INTO daily_checkins
-       (telegram_id, checkin_date, sleep_score, mood_score, memory_score, comment, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (telegram_id, checkin_date, sleep_score, mood_score, memory_score, comment, updated_at, energy_score, hot_flashes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (telegram_id, checkin_date) DO UPDATE SET
        sleep_score = excluded.sleep_score,
        mood_score = excluded.mood_score,
        memory_score = excluded.memory_score,
        comment = excluded.comment,
+       energy_score = CASE WHEN $10 THEN excluded.energy_score ELSE daily_checkins.energy_score END,
+       hot_flashes = CASE WHEN $11 THEN excluded.hot_flashes ELSE daily_checkins.hot_flashes END,
        corrected_manually = 1,
        updated_at = excluded.updated_at`,
-    [String(telegramId), date, sleep, mood, memory, comment ?? null, now]
+    [String(telegramId), date, sleep, mood, memory, comment ?? null, now,
+      energy ?? null, hot_flashes ?? null, energy !== undefined, hot_flashes !== undefined]
   );
 }
 
@@ -503,7 +512,7 @@ async function getCheckinHistory(telegramId, days = 14) {
   const cutoffDate = almatyDateString(cutoff);
 
   const { rows } = await pool.query(
-    `SELECT checkin_date, sleep_score, mood_score, memory_score, comment
+    `SELECT checkin_date, sleep_score, mood_score, memory_score, comment, energy_score, hot_flashes
      FROM daily_checkins
      WHERE telegram_id = $1 AND checkin_date >= $2
      ORDER BY checkin_date ASC`,

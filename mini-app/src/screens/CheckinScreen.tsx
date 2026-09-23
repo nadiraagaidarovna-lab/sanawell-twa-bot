@@ -11,6 +11,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { hapticFeedbackNotificationOccurred } from '@telegram-apps/sdk';
 import NumericSelector from '../components/NumericSelector';
+import HotFlashesSelector from '../components/HotFlashesSelector';
+import { HOT_FLASHES_LABELS, type HotFlashes } from '../content/checkin';
 import { useMainButton } from '../lib/useMainButton';
 import { apiFetch, ApiError } from '../lib/api';
 
@@ -19,6 +21,8 @@ interface CheckinRecord {
   moodScore: number;
   memoryScore: number;
   comment: string | null;
+  energyScore: number | null;
+  hot_flashes: HotFlashes | null;
   canCorrect: boolean;
 }
 
@@ -57,6 +61,8 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
   const [mood, setMood] = useState(5);
   const [memory, setMemory] = useState(5);
   const [comment, setComment] = useState('');
+  const [energy, setEnergy] = useState<number | null>(null);
+  const [hotFlashes, setHotFlashes] = useState<HotFlashes | null>(null);
 
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -93,7 +99,7 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
     try {
       const { checkin } = await apiFetch<{ ok: true; checkin: CheckinRecord }>('/checkin', {
         method: 'POST',
-        body: JSON.stringify({ sleep, mood, memory, comment: comment.trim() || undefined }),
+        body: JSON.stringify({ sleep, mood, memory, energy, hot_flashes: hotFlashes, comment: comment.trim() || undefined }),
       });
       if (hapticFeedbackNotificationOccurred.isAvailable()) {
         hapticFeedbackNotificationOccurred('success');
@@ -117,6 +123,8 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
       setMood(saved.moodScore);
       setMemory(saved.memoryScore);
       setComment(saved.comment ?? '');
+      setEnergy(saved.energyScore ?? null);
+      setHotFlashes(saved.hot_flashes ?? null);
     }
     setView('form');
   };
@@ -143,10 +151,11 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
     return (
       <Shell embedded={embedded} title="Спасибо 🤍">
         <p className="body-text">
-          Записала: сон {saved.sleepScore}, настроение {saved.moodScore}, голова{' '}
+          Записала: сон {saved.sleepScore}, настроение {saved.moodScore}, ясность / концентрация{' '}
           {saved.memoryScore}
           {saved.comment ? ' — и то, что вы написали, тоже сохранила.' : '.'}
         </p>
+        <p className="body-text">Энергия: {saved.energyScore ?? 'не отмечено'}. Приливы и ночная потливость: {saved.hot_flashes ? HOT_FLASHES_LABELS[saved.hot_flashes] : 'не отмечено'}.</p>
         {saved.canCorrect && (
           <button type="button" className="btn-secondary" onClick={handleEdit}>
             Исправить
@@ -160,6 +169,7 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
     <Shell embedded={embedded} title="Как вы сегодня?">
       <div className="scales">
         <NumericSelector label="Сон" hint="пробуждения, бессонница" value={sleep} onChange={setSleep} />
+        <NumericSelector label="Энергия" hint="Как вы оцениваете свою энергию сегодня?" value={energy} onChange={setEnergy} />
         <NumericSelector
           label="Настроение"
           hint="тревога, раздражительность"
@@ -167,11 +177,12 @@ export default function CheckinScreen({ embedded = false, onSaved }: CheckinScre
           onChange={setMood}
         />
         <NumericSelector
-          label="Голова"
+          label="Ясность / концентрация"
           hint="туман, рассеянность"
           value={memory}
           onChange={setMemory}
         />
+        <HotFlashesSelector value={hotFlashes} onChange={setHotFlashes} />
       </div>
 
       <label className="comment-label" htmlFor="checkin-comment">

@@ -1,0 +1,9 @@
+.hot-flashes-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.hot-flashes-options .numeric-selector-option {
+  font-size: 16px;
+  padding: 8px;
+}
