@@ -7,7 +7,7 @@ import { apiFetch } from '../../lib/api';
 import { legalDocumentTitle, legalDocumentUrl } from '../../lib/legalDocuments';
 import { saveConsents } from '../../lib/onboardingFocusGroup';
 import { errorKindOf, track } from '../../lib/analytics';
-import { PRIORITY_UNSURE, TEXT, TITLES, TOPICS, WELCOME, topicTitle } from '../../content/onboardingV2';
+import { NOT_OFFERED_AS_PRIORITY, PRIORITY_UNSURE, TEXT, TITLES, TOPICS, WELCOME, topicTitle } from '../../content/onboardingV2';
 import './OnboardingFlow.css';
 
 // Seven screens: 0 welcome, 1 consent, 2 name, 3 topics, 4 main priority, 5 review, 6 start map.
@@ -56,10 +56,13 @@ export function OnboardingWelcomeAgain({ onClose }: { onClose: () => void }) {
 
 function WelcomeText() {
   return <>
+    <p>{WELCOME.subtitle}</p>
     <ul className="sw-onboarding-benefits">
-      {WELCOME.benefits.map((benefit) => <li key={benefit}>{benefit}</li>)}
+      {WELCOME.benefits.map((benefit) => <li key={benefit.title}>
+        <strong>{benefit.title}</strong><span>{benefit.text}</span>
+      </li>)}
     </ul>
-    <p className="sw-onboarding-note">{WELCOME.note}</p>
+    <p>{WELCOME.lead}</p>
   </>;
 }
 
@@ -137,7 +140,7 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
   const enabled = loadStatus === 'ready' && !busy && (
     step === STEP.consent ? terms && privacy
       : step === STEP.topics ? topics.length > 0
-      : step === STEP.priority ? !!priority && (priority === PRIORITY_UNSURE || topics.includes(priority))
+      : step === STEP.priority ? !!priority && (priority === PRIORITY_UNSURE || (topics.includes(priority) && !NOT_OFFERED_AS_PRIORITY.includes(priority)))
       : true);
 
   const go = (to: number) => { setError(''); setStep(to); };
@@ -277,7 +280,7 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
     </main>;
   }
 
-  const priorityOptions = [...TOPICS.filter((t) => topics.includes(t.key)).map((t) => ({ key: t.key as string, label: t.title })),
+  const priorityOptions = [...TOPICS.filter((t) => topics.includes(t.key) && !NOT_OFFERED_AS_PRIORITY.includes(t.key)).map((t) => ({ key: t.key as string, label: t.title })),
     { key: PRIORITY_UNSURE as string, label: TEXT.priorityUnsure }];
 
   return <main className="sw-onboarding" lang="ru">

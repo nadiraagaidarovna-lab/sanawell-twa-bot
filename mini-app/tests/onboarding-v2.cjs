@@ -55,7 +55,12 @@ const heading = (page, name) => page.getByRole('heading', { name, exact: true })
       await fakeServer(page, record, writes);
       await page.goto(base);
       await heading(page, WELCOME).waitFor();
-      for (const b of ['Понять себя', 'Получить ясные ответы', 'Знать следующие шаги']) assert(await page.getByText(b, { exact: true }).isVisible());
+      for (const line of ['SanaWell мягко сопровождает вас через изменения после 40.', 'Поймёте себя', 'Сон, приливы, настроение — что с чем связано.',
+        'Получите ясные ответы', 'На понятном языке, без страшилок.', 'Будете знать, что делать', 'Простые шаги и подсказки, когда обратиться к врачу.',
+        'Несколько вопросов помогут настроить приложение под вас. Правильных ответов нет.']) {
+        assert.equal(await page.getByText(line, { exact: true }).count(), 1, line);
+      }
+      assert(await page.getByRole('button', { name: 'Начать знакомство', exact: true }).isVisible());
       assert.equal(await page.getByText('1/7').count(), 1);
       await page.getByRole('button', { name: 'Начать знакомство', exact: true }).click();
       await page.getByRole('checkbox').nth(0).check(); await page.getByRole('checkbox').nth(1).check();
@@ -66,20 +71,21 @@ const heading = (page, name) => page.getByRole('heading', { name, exact: true })
       await heading(page, 'Что для вас сейчас важно?').waitFor();
       assert(await next.isDisabled(), 'at least one topic required');
       assert.equal(await page.getByRole('checkbox').count(), 6);
-      await page.locator('input[value=emotions]').check(); await page.locator('input[value=sleep]').check();
+      await page.locator('input[value=emotions]').check(); await page.locator('input[value=sleep]').check(); await page.locator('input[value=environment]').check();
       await next.click();
       await heading(page, 'Что для вас главное сейчас?').waitFor();
+      // 'Окружение и смысл' is selectable as a topic but not offered as the main priority.
       assert.deepEqual(await page.getByRole('radio').evaluateAll(r => r.map(x => x.value)), ['sleep', 'emotions', 'unsure']);
       assert(await next.isDisabled());
       await page.locator('input[value=emotions]').check(); await next.click();
       await heading(page, 'Проверьте ответы').waitFor();
       const review = await page.locator('.sw-onboarding-review').innerText();
-      assert(review.includes('Тестовая') && review.includes('Сон и восстановление, Эмоциональное здоровье') && review.includes('Эмоциональное здоровье'));
+      assert(review.includes('Тестовая') && review.includes('Сон и восстановление, Эмоциональное здоровье, Окружение и смысл') && review.includes('Эмоциональное здоровье'));
       // Edit topics from the review: removing the priority topic asks for the priority again.
       await page.getByRole('button', { name: 'Изменить: Темы', exact: true }).click();
       await heading(page, 'Что для вас сейчас важно?').waitFor();
       assert(await page.locator('input[value=sleep]').isChecked() && await page.locator('input[value=emotions]').isChecked());
-      await page.locator('input[value=emotions]').uncheck(); await next.click();
+      await page.locator('input[value=emotions]').uncheck(); await page.locator('input[value=environment]').uncheck(); await next.click();
       await heading(page, 'Что для вас главное сейчас?').waitFor();
       await page.locator('input[value=unsure]').check(); await next.click();
       await heading(page, 'Проверьте ответы').waitFor();

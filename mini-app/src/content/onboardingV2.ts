@@ -1,6 +1,6 @@
 // content/onboardingV2.ts — texts of the new 7-screen onboarding (Russian only for the first
 // launch; existing translations in content/anketa.ts stay untouched).
-// Welcome copy: the approved phrases only (headline, three benefits, «Начать знакомство").
+// Welcome copy: approved text, verbatim (06.10.2026).
 // Topics: the six approved wellness areas (docs/sanawell/DECISIONS.md); `homeCard` is the
 // existing card title on Home (components/home/WellnessGrid.tsx). `found` says what the woman
 // actually finds there today (DRAFT); no personal programme is promised where none exists.
@@ -8,14 +8,19 @@
 
 export const WELCOME = {
   title: 'Вы не одна. И разбираться во всём самой не нужно',
-  benefits: ['Понять себя', 'Получить ясные ответы', 'Знать следующие шаги'],
-  note: 'SanaWell AI — wellness-сервис. Не ставит диагнозы и не заменяет врача.',
+  subtitle: 'SanaWell мягко сопровождает вас через изменения после 40.',
+  benefits: [
+    { title: 'Поймёте себя', text: 'Сон, приливы, настроение — что с чем связано.' },
+    { title: 'Получите ясные ответы', text: 'На понятном языке, без страшилок.' },
+    { title: 'Будете знать, что делать', text: 'Простые шаги и подсказки, когда обратиться к врачу.' },
+  ],
+  lead: 'Несколько вопросов помогут настроить приложение под вас. Правильных ответов нет.',
   button: 'Начать знакомство',
 } as const;
 
 export const TOPICS = [
   { key: 'nutrition', title: 'Питание и обмен веществ', homeCard: 'Питание',
-    found: 'Карточки о питании: стабильный сахар в крови, омега-3, поддержка гормонального фона — с объяснением, почему это важно сейчас.' },
+    found: 'Материалы о питании и повседневных пищевых привычках.' },
   { key: 'movement', title: 'Движение и сила', homeCard: 'Движение',
     found: 'Упражнения для женщин 40+: принципы нагрузки, приседания, баланс, плечи — с пояснениями к каждому.' },
   { key: 'sleep', title: 'Сон и восстановление', homeCard: 'Сон',
@@ -29,6 +34,9 @@ export const TOPICS = [
 ] as const;
 
 export type TopicKey = (typeof TOPICS)[number]['key'];
+// Topics without content yet are selectable but not offered as the main priority. An earlier
+// saved priority is kept as is.
+export const NOT_OFFERED_AS_PRIORITY: readonly string[] = ['environment'];
 export const PRIORITY_UNSURE = 'unsure';
 export type Priority = TopicKey | typeof PRIORITY_UNSURE;
 

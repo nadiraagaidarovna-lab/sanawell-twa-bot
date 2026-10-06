@@ -61,3 +61,6 @@
 .sw-onboarding-map-focus { background: var(--sw-primary-soft); border-color: transparent; }
 .sw-onboarding-map-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
 .sw-onboarding-map-list li { display: flex; flex-direction: column; }
+.sw-onboarding-benefits li { display: flex; flex-direction: column; gap: 4px; font-weight: 400; }
+.sw-onboarding-benefits li strong { font-weight: 600; }
+.sw-onboarding-benefits li span { font-size: 16px; color: var(--sw-v3-ink-soft); }
