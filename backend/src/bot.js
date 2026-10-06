@@ -82,6 +82,8 @@ function startBot({
   // PUBLIC_URL falls back to WEBAPP_URL (same service).
   app = null,
   publicUrl = process.env.PUBLIC_URL,
+  webhookRetries = 10,
+  webhookRetryDelayMs = 15 * 1000,
 } = {}) {
   if (!botToken) {
     console.warn('BOT_TOKEN не задан — бот не запущен (API и фронтенд продолжат работать).');
@@ -109,9 +111,21 @@ function startBot({
         res.sendStatus(200);
       });
       const base = (publicUrl || webAppUrl).replace(/\/$/, '');
-      bot.setWebHook(`${base}${WEBHOOK_PATH}`, { secret_token: secret, allowed_updates: ['message', 'callback_query'] })
-        .then(() => console.log(`Вебхук установлен: ${base}${WEBHOOK_PATH}`))
-        .catch((e) => console.error('Не удалось установить вебхук:', e.message));
+      // During a zero-downtime deploy the previous (polling) instance may still be running and
+      // Telegram answers 409; retry until the old instance is gone.
+      const setWebhook = async (attempt = 1) => {
+        try {
+          await bot.setWebHook(`${base}${WEBHOOK_PATH}`, { secret_token: secret, allowed_updates: ['message', 'callback_query'] });
+          console.log(`Вебхук установлен: ${base}${WEBHOOK_PATH}`);
+        } catch (e) {
+          console.warn(`Не удалось установить вебхук (попытка ${attempt}): ${e.message}`);
+          if (attempt < webhookRetries) {
+            const t = setTimeout(() => setWebhook(attempt + 1), webhookRetryDelayMs);
+            if (typeof t.unref === 'function') t.unref();
+          }
+        }
+      };
+      setWebhook();
     }
   }
 

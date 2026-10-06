@@ -9,7 +9,7 @@ const filename = path.resolve(__dirname, '../src/bot.js');
 const nativeRequire = createRequire(filename);
 const express = nativeRequire('express');
 
-function loadBot() {
+function loadBot(webhookFailures = 0) {
   const created = [];
   class FakeBot {
     constructor(token, options) { this.options = options; this.textHandlers = []; this.sent = []; this.webhook = null; created.push(this); }
@@ -20,7 +20,11 @@ function loadBot() {
       for (const [re, fn] of this.textHandlers) if (msg && re.test(msg.text)) fn(msg);
     }
     sendMessage(chatId, text, options) { this.sent.push({ chatId, text, options }); return Promise.resolve({}); }
-    setWebHook(url, options) { this.webhook = { url, options }; return Promise.resolve(true); }
+    setWebHook(url, options) {
+      this.webhookCalls = (this.webhookCalls || 0) + 1;
+      if (this.webhookCalls <= webhookFailures) return Promise.reject(new Error('ETELEGRAM: 409 Conflict'));
+      this.webhook = { url, options }; return Promise.resolve(true);
+    }
   }
   const module = { exports: {} };
   vm.runInThisContext('(function(require,module,exports){' + fs.readFileSync(filename, 'utf8') + '\n})', { filename })(
@@ -69,4 +73,13 @@ test('polling mode (production default) is unchanged: no webhook route, no setWe
     assert.equal(bot.webhook, null);
     assert.equal((await fetch(base + WEBHOOK_PATH, { method: 'POST' })).status, 404);
   } finally { await new Promise(r => server.close(r)); }
+});
+
+test('webhook mode retries setWebHook after 409 during a zero-downtime deploy', async () => {
+  const { startBot } = loadBot(2);
+  const app = express(); app.use(express.json());
+  const bot = startBot({ botToken: 'test-token', webAppUrl: 'https://staging.example', botMode: 'webhook', app, webhookRetryDelayMs: 5 });
+  for (let i = 0; i < 50 && !bot.webhook; i++) await new Promise(r => setTimeout(r, 10));
+  assert.equal(bot.webhookCalls, 3);
+  assert.equal(bot.webhook.url, 'https://staging.example/telegram/webhook');
 });
