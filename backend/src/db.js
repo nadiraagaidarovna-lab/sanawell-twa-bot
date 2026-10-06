@@ -521,6 +521,33 @@ async function recordConsentGrants(telegramId, { documents, version, source }) {
   }
 }
 
+// Withdrawal: one 'withdrawn' row per document (same transaction) and both reminders off, so the
+// bot stops writing. Saved data stays until a deletion request; reminders are not re-enabled by
+// a later re-consent (opt-in only). Legacy *_consent_at columns are left as historical evidence.
+async function recordConsentWithdrawal(telegramId, { documents, version, source }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const document of documents) {
+      await client.query(
+        `INSERT INTO consent_events (telegram_id, document, document_version, action, source)
+         VALUES ($1, $2, $3, 'withdrawn', $4)`,
+        [String(telegramId), document, version, source]
+      );
+    }
+    await client.query(
+      'UPDATE users SET reminder_opt_in = 0, habits_reminder_opt_in = 0 WHERE telegram_id = $1',
+      [String(telegramId)]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function setReminderOptIn(telegramId, optIn) {
   await touchOrCreateUser(telegramId);
   await pool.query('UPDATE users SET reminder_opt_in = $1 WHERE telegram_id = $2', [
@@ -691,6 +718,7 @@ module.exports = {
   setDataStorageConsent,
   getLatestConsentEvents,
   recordConsentGrants,
+  recordConsentWithdrawal,
   setReminderOptIn,
   setHabitsReminderOptIn,
   setDisplayName,

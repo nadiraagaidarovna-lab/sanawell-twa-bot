@@ -52,6 +52,9 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   };
   // Writes of personal and wellbeing data require a confirmed consent to the current documents.
   const consentGate = consent.requireConsent(db);
+  // Turning a reminder ON uses the Telegram ID for messages, so it needs consent; turning it
+  // OFF must always work (also from the bot message after a withdrawal).
+  const consentGateWhenEnabling = (req, res, next) => (req.body && req.body.optIn ? consentGate(req, res, next) : next());
 
   // Состояние пользователя при открытии Web App: выбран ли путь менопаузы, даны ли оба
   // обязательных согласия (раздел 13 ТЗ), пройден ли онбординг целиком. onboarded требует
@@ -409,6 +412,32 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     })
   );
 
+  // Withdrawal of both documents from the cabinet. Not gated: it must work without consent and
+  // is idempotent (nothing is recorded when there is no current consent). After it, consentGate
+  // rejects new writes; documents, the deletion request and reading own data stay available.
+  router.post(
+    '/consents/withdraw',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      try {
+        const status = await consent.getConsentStatus(db, req.telegramId);
+        if (status.terms || status.privacyDataConsent) {
+          const documents = consent.REQUIRED_DOCUMENTS.filter((document) =>
+            document === 'terms' ? status.terms : status.privacyDataConsent);
+          await db.recordConsentWithdrawal(req.telegramId, {
+            documents, version: consent.CURRENT_VERSION, source: consent.WITHDRAWAL_SOURCE,
+          });
+        }
+        res.json({ ok: true, ...(await consent.getConsentStatus(db, req.telegramId)) });
+      } catch (error) {
+        if (error.code === consent.UNDEFINED_TABLE) {
+          return res.status(503).json({ error: 'consent_storage_unavailable', reason: 'consent_storage_unavailable' });
+        }
+        throw error;
+      }
+    })
+  );
+
   // Немедицинский дисклеймер и раскрытие хранения данных — 2 из 3 согласий раздела 13,
   // каждое своим эндпоинтом и своим полем в БД, чтобы отзыв одного не затрагивал другие
   // (третье согласие, пуш-уведомления, уже отдельный /reminder-opt-in ниже). consented:false
@@ -439,6 +468,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/reminder-opt-in',
     requireAuth,
+    consentGateWhenEnabling,
     asyncHandler(async (req, res) => {
       const { optIn } = req.body || {};
       await db.setReminderOptIn(req.telegramId, !!optIn);
@@ -452,6 +482,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/habits-reminder-opt-in',
     requireAuth,
+    consentGateWhenEnabling,
     asyncHandler(async (req, res) => {
       const { optIn } = req.body || {};
       await db.setHabitsReminderOptIn(req.telegramId, !!optIn);

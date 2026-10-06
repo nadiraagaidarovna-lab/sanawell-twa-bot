@@ -108,6 +108,45 @@ async function normalRead(route, path, checkin = null) {
       assert.deepEqual(writes, []);
       console.log('PASS welcome again: new welcome, read-only, returns to the cabinet'); await page.close();
     }
+    {
+      // Withdrawal from the cabinet, then the deletion request from the re-consent page.
+      const page = await telegramPage(browser); const writes = [];
+      const record = recordFor({ onboardingWelcomeSeen: true, onboardingAnketaCompleted: true, consents: { current: true }, reminderOptIn: true });
+      let failWithdraw = true;
+      await page.route('**/api/**', route => {
+        const request = route.request(), path = new URL(request.url()).pathname;
+        if (request.method() === 'GET') return path === '/api/me' ? route.fulfill({ json: record }) : normalRead(route, path);
+        writes.push(path);
+        if (path === '/api/consents/withdraw') {
+          if (failWithdraw) { failWithdraw = false; return route.fulfill({ status: 503, json: {} }); }
+          record.consents = { current: false };
+          return route.fulfill({ json: { ok: true, current: false, terms: false, privacyDataConsent: false, version: legal.version } });
+        }
+        if (path === '/api/account/delete-request') return route.fulfill({ json: { ok: true } });
+        throw new Error(`Unexpected write: ${path}`);
+      });
+      await page.goto(base); await page.locator('.sw-greeting').waitFor();
+      await page.getByRole('button', { name: 'Профиль', exact: true }).click();
+      await page.getByRole('button', { name: 'Отозвать согласие', exact: true }).click();
+      await page.getByText('Отозвать согласие?').waitFor();
+      await page.getByRole('button', { name: 'Отмена', exact: true }).first().click();
+      assert.deepEqual(writes, []); // cancel writes nothing
+      await page.getByRole('button', { name: 'Отозвать согласие', exact: true }).click();
+      await page.getByRole('button', { name: 'Отозвать', exact: true }).click();
+      await page.getByText('Не удалось отозвать согласие').waitFor(); // failure is visible, no fake success
+      await page.getByRole('button', { name: 'Отозвать', exact: true }).click();
+      await page.getByText('Согласие отозвано. Новые данные не сохраняются.').waitFor();
+      assert.equal(await page.locator('.cabinet-link').count(), 3); // documents stay available
+      assert(await page.getByRole('button', { name: 'Удалить аккаунт', exact: true }).isVisible());
+      // Next open: completed account without consent -> re-consent page, which offers deletion.
+      await page.goto(base); await page.getByText('Ваши данные — под вашим контролем').waitFor();
+      assert.equal(await page.getByRole('link', { name: 'Условия использования', exact: true }).count(), 1);
+      await page.getByRole('button', { name: 'Запросить удаление данных', exact: true }).click();
+      await page.getByRole('button', { name: 'Да, запросить удаление', exact: true }).click();
+      await page.getByText('Запрос на удаление принят').waitFor();
+      assert.deepEqual(writes, ['/api/consents/withdraw', '/api/consents/withdraw', '/api/account/delete-request']);
+      console.log('PASS withdrawal: two-step, visible failure, documents and deletion stay available'); await page.close();
+    }
     for (const scenario of ['success','first-fails','second-fails','lost-first','lost-second','status-fails','invalid-status','unconfirmed','duplicate','partial-existing','progress']) {
       const page = await telegramPage(browser);
       const record = recordFor({ onboardingWelcomeSeen: scenario === 'partial-existing' });

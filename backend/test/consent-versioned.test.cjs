@@ -10,6 +10,7 @@ const { createRequire } = require('node:module');
 const { PGlite } = require(process.env.SANAWELL_TEST_PGLITE_PATH || '@electric-sql/pglite');
 const src = path.resolve(__dirname, '../src');
 const consentMigration = fs.readFileSync(path.resolve(__dirname, '../migrations/20261006_consent_events.sql'), 'utf8');
+const profileSourceMigration = fs.readFileSync(path.resolve(__dirname, '../migrations/20261007_consent_events_profile_source.sql'), 'utf8');
 const cycleMigration = fs.readFileSync(path.resolve(__dirname, '../migrations/20260923_onboarding_cycle_mht.sql'), 'utf8');
 const TOKEN = 'consent-isolated-test-token';
 function load(file, overrides = {}) {
@@ -35,6 +36,7 @@ async function setup(env = {}) {
   await db.initSchema();
   await pg.exec(cycleMigration);
   await pg.exec(consentMigration);
+  await pg.exec(profileSourceMigration);
   const saved = {};
   for (const [key, value] of Object.entries(env)) { saved[key] = process.env[key]; process.env[key] = value; }
   const { buildRouter } = load('routes.js', { './db': db });
@@ -196,4 +198,39 @@ test('onboarding version is decided by the server for the regular bot button', a
       }
     } finally { await close(); }
   }
+});
+
+test('withdrawal blocks new writes, keeps documents, own data and the deletion request', async () => {
+  const { pg, db, request, close } = await setup();
+  try {
+    assert.equal((await request('/consents/withdraw', {})).status, 200); // nothing to withdraw yet
+    assert.equal((await pg.query('SELECT count(*)::int n FROM consent_events')).rows[0].n, 0);
+    assert.equal((await request('/consents', GRANT)).status, 200);
+    assert.equal((await request('/anketa/age', { age: 47 })).status, 200);
+    assert.equal((await request('/reminder-opt-in', { optIn: true })).status, 200);
+    assert.equal((await request('/habits-reminder-opt-in', { optIn: true })).status, 200);
+
+    const withdrawn = await request('/consents/withdraw', {});
+    assert.equal(withdrawn.status, 200);
+    assert.deepEqual({ current: withdrawn.body.current, terms: withdrawn.body.terms, privacy: withdrawn.body.privacyDataConsent }, { current: false, terms: false, privacy: false });
+    const rows = (await pg.query("SELECT document, action, source, document_version FROM consent_events WHERE action='withdrawn' ORDER BY document")).rows;
+    assert.deepEqual(rows.map(r => [r.document, r.source, r.document_version]), [['privacy_data_consent', 'profile', CURRENT_VERSION], ['terms', 'profile', CURRENT_VERSION]]);
+    const user = await db.getUser('101');
+    assert.equal(user.reminder_opt_in, 0); assert.equal(user.habits_reminder_opt_in, 0);
+    assert.equal(user.age, 47); // saved data is kept until a deletion request
+
+    for (const [route, body] of WRITES) assert.equal((await request(route, body)).status, 403, route);
+    assert.equal((await request('/reminder-opt-in', { optIn: true })).status, 403); // enabling needs consent
+    assert.equal((await request('/reminder-opt-in', { optIn: false })).status, 200); // disabling always works
+    assert.equal((await request('/me')).status, 200);
+    assert.equal((await request('/checkin/history?days=7')).status, 200);
+    assert.equal((await request('/account/delete-request', {})).status, 200);
+    assert.equal((await request('/account/cancel-deletion', {})).status, 200);
+    assert.equal((await request('/consents/withdraw', {})).status, 200); // idempotent
+    assert.equal((await pg.query("SELECT count(*)::int n FROM consent_events WHERE action='withdrawn'")).rows[0].n, 2);
+
+    assert.equal((await request('/consents', { ...GRANT, source: 'reconsent' })).status, 200);
+    assert.equal((await request('/anketa/age', { age: 48 })).status, 200);
+    assert.equal((await db.getUser('101')).reminder_opt_in, 0); // not silently re-enabled
+  } finally { await close(); }
 });

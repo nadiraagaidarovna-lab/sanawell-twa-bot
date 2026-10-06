@@ -12,8 +12,10 @@ import { useNavigation } from '../lib/useNavigation';
 import { formatDate, pluralDays } from '../lib/progressFormat';
 import BottomNav from '../components/BottomNav';
 import { legalDocumentTitle, legalDocumentUrl, type LegalDocumentKey } from '../lib/legalDocuments';
+import { withdrawConsents } from '../lib/onboardingFocusGroup';
 
 interface MeResponse {
+  consents?: { current?: boolean };
   onboarded: boolean;
   language: string | null;
   reminderOptIn: boolean;
@@ -39,6 +41,8 @@ type Lang = 'ru' | 'kk';
 
 // 'confirm' — первый шаг («Удалить аккаунт?»), 'sending' — запрос ушёл, 'done' — принят.
 type DeleteStep = 'idle' | 'confirm' | 'sending' | 'done';
+// Consent withdrawal: same two-step pattern as deletion; 'withdrawn' — server confirmed.
+type WithdrawStep = 'idle' | 'confirm' | 'sending' | 'withdrawn';
 
 export default function CabinetScreen() {
   const { push } = useNavigation();
@@ -52,6 +56,8 @@ export default function CabinetScreen() {
   // Отмена запроса на удаление (кнопка в состоянии 'done') — отдельный флаг, чтобы не менять
   // deleteStep, пока запрос в пути, и не дать нажать дважды.
   const [cancelling, setCancelling] = useState(false);
+  const [withdrawStep, setWithdrawStep] = useState<WithdrawStep>('idle');
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +70,7 @@ export default function CabinetScreen() {
         setReminderOptIn(me.reminderOptIn);
         setHabitsReminderOptIn(me.habitsReminderOptIn);
         if (me.accountDeleted) setDeleteStep('done');
+        if (me.consents?.current !== true) setWithdrawStep('withdrawn');
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -126,6 +133,21 @@ export default function CabinetScreen() {
       // Успех не имитируем: если запрос не дошёл, женщина должна это знать.
       setDeleteError('Не удалось отправить запрос. Попробуйте ещё раз чуть позже.');
       setDeleteStep('confirm');
+    }
+  };
+
+  const handleConfirmWithdraw = async () => {
+    setWithdrawStep('sending');
+    setWithdrawError(null);
+    try {
+      await withdrawConsents();
+      // The server switched both reminders off together with the withdrawal.
+      setReminderOptIn(false);
+      setHabitsReminderOptIn(false);
+      setWithdrawStep('withdrawn');
+    } catch {
+      setWithdrawError('Не удалось отозвать согласие. Проверьте интернет и попробуйте ещё раз.');
+      setWithdrawStep('confirm');
     }
   };
 
@@ -277,6 +299,50 @@ export default function CabinetScreen() {
                 {legalDocumentTitle(key)}
               </a>
             ))}
+
+            {/* Consent withdrawal. Documents above and the deletion request below stay available. */}
+            <p className="cabinet-heading" style={{ marginTop: 16 }}>
+              Согласие на обработку данных
+            </p>
+            {withdrawStep === 'idle' && (
+              <>
+                <p className="cabinet-note">Вы дали согласие с Условиями использования и на обработку персональных данных.</p>
+                <button type="button" className="cabinet-btn" onClick={() => setWithdrawStep('confirm')}>
+                  Отозвать согласие
+                </button>
+              </>
+            )}
+            {(withdrawStep === 'confirm' || withdrawStep === 'sending') && (
+              <>
+                <p className="cabinet-name">Отозвать согласие?</p>
+                <p className="cabinet-note">
+                  SanaWell AI перестанет сохранять новые данные: отметки самочувствия, ответы и профиль.
+                  Напоминания отключатся. Уже сохранённые данные останутся, пока вы не запросите удаление аккаунта ниже.
+                  Документы останутся доступны.
+                </p>
+                {withdrawError && <p className="cabinet-error" role="alert">{withdrawError}</p>}
+                <div className="cabinet-confirm-row">
+                  <button type="button" className="cabinet-btn" disabled={withdrawStep === 'sending'}
+                    onClick={() => { setWithdrawStep('idle'); setWithdrawError(null); }}>
+                    Отмена
+                  </button>
+                  <button type="button" className="cabinet-btn-danger" disabled={withdrawStep === 'sending'}
+                    onClick={handleConfirmWithdraw}>
+                    {withdrawStep === 'sending' ? 'Отправляю…' : 'Отозвать'}
+                  </button>
+                </div>
+              </>
+            )}
+            {withdrawStep === 'withdrawn' && (
+              <>
+                <p className="cabinet-note" role="status">
+                  Согласие отозвано. Новые данные не сохраняются. Чтобы снова пользоваться SanaWell AI, дайте согласие ещё раз.
+                </p>
+                <button type="button" className="cabinet-btn" onClick={() => push('reconsent')}>
+                  Дать согласие снова
+                </button>
+              </>
+            )}
 
             {/* Срез О3 (ТЗ 6.2.1): ручной повторный показ Шага 0 — не трогает
                 onboarding_welcome_seen на бэкенде, только навигация. */}

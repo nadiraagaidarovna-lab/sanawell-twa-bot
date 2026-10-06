@@ -18,6 +18,15 @@ export async function saveConsents(source: ConsentSource): Promise<void> {
   }
 }
 
+// Withdraws both documents. Resolves only when the server no longer reports any current consent.
+export async function withdrawConsents(): Promise<void> {
+  const result = await apiFetch<{ ok: boolean; current: boolean; terms: boolean; privacyDataConsent: boolean }>(
+    '/consents/withdraw', { method: 'POST' });
+  if (result.ok !== true || result.current !== false || result.terms || result.privacyDataConsent) {
+    throw new Error('Withdrawal not confirmed');
+  }
+}
+
 // Called only by the normal app's focus-group route, never the development preview.
 export async function completeFocusGroupOnboarding(): Promise<void> {
   // Read each attempt so partial saves/lost responses never require undoing a flag.

@@ -7,6 +7,8 @@ const CURRENT_VERSION = legal.version;
 // The two onboarding checkboxes: Terms of use; Privacy policy + data processing consent.
 const REQUIRED_DOCUMENTS = ['terms', 'privacy_data_consent'];
 const SOURCES = ['onboarding_v2', 'legacy_consent_screen', 'reconsent'];
+// Withdrawal is possible only from the cabinet (migration 20261007_consent_events_profile_source.sql).
+const WITHDRAWAL_SOURCE = 'profile';
 
 // Missing explicit migration (backend/migrations/20261006_consent_events.sql).
 const UNDEFINED_TABLE = '42P01';
@@ -50,6 +52,7 @@ module.exports = {
   CURRENT_VERSION,
   REQUIRED_DOCUMENTS,
   SOURCES,
+  WITHDRAWAL_SOURCE,
   UNDEFINED_TABLE,
   getConsentStatus,
   requireConsent,

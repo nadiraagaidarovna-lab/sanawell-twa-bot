@@ -98,6 +98,17 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
   consentOnly?: boolean;
 }) {
   const [step, setStep] = useState(consentOnly ? 1 : 0);
+  // Re-consent page only: a woman who does not want to consent again can still request deletion.
+  const [deletion, setDeletion] = useState<'idle' | 'confirm' | 'sending' | 'done' | 'error'>('idle');
+  const requestDeletion = async () => {
+    setDeletion('sending');
+    try {
+      await apiFetch('/account/delete-request', { method: 'POST' });
+      setDeletion('done');
+    } catch {
+      setDeletion('error');
+    }
+  };
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [name, setName] = useState(() => getTelegramFirstName() ?? '');
@@ -298,6 +309,18 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
         <p className="sw-onboarding-note">Документы — рабочие проекты для закрытой MVP-фокус-группы. Перед публичным запуском требуется финальная юридическая проверка.</p>
         {savingConsent && <p role="status">Сохраняем ваши согласия…</p>}
         {consentError && <p role="alert">{consentError}</p>}
+        {consentOnly && <div className="sw-onboarding-note">
+          {deletion === 'idle' && <><p>Если вы не хотите давать согласие, можно запросить удаление ваших данных.</p>
+            <button type="button" className="sw-onboarding-link" onClick={() => setDeletion('confirm')}>Запросить удаление данных</button></>}
+          {(deletion === 'confirm' || deletion === 'sending' || deletion === 'error') && <>
+            <p>Запросить удаление аккаунта и данных? После обработки запроса удаление необратимо.</p>
+            {deletion === 'error' && <p role="alert">Не удалось отправить запрос. Попробуйте ещё раз.</p>}
+            <button type="button" className="sw-onboarding-link" disabled={deletion === 'sending'} onClick={requestDeletion}>
+              {deletion === 'sending' ? 'Отправляем…' : 'Да, запросить удаление'}</button>
+            <button type="button" className="sw-onboarding-link" disabled={deletion === 'sending'} onClick={() => setDeletion('idle')}>Отмена</button>
+          </>}
+          {deletion === 'done' && <p role="status">Запрос на удаление принят. Новые данные не сохраняются.</p>}
+        </div>}
       </>}
       {step === 2 && <>
         <p>Это поможет SanaWell сделать вашу историю более личной.</p>
