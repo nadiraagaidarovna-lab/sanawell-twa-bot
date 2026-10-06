@@ -9,7 +9,7 @@ const base = process.env.ONBOARDING_TEST_BASE_URL || 'http://127.0.0.1:5175/chec
   const page = await browser.newPage(); const writes=[]; let reads=0,consented=false,failed=false,release,started;
   const barrier=new Promise(r=>release=r); const waiting=new Promise(r=>started=r);
   const record={onboardingVersion:'v2',onboardingAnketaCompleted:false,onboardingWelcomeSeen:false,medicalDisclaimerConsented:true,dataStorageConsented:true,displayName:['existing','blank-preserves'].includes(scenario)?'Сохранённое имя':null,age:['existing','blank-preserves'].includes(scenario)?49:null,email:'unchanged@example.test',phone:'+77000000000',cycleSituation:null,mhtStatus:null};
-  await page.route('**/api/**',async route=>{
+  await page.route('**/api/**',async route=>{ if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); } 
    const path=new URL(route.request().url()).pathname;
    if(path==='/api/consents'){consented=true;return route.fulfill({json:{ok:true,current:true,version:require('../src/lib/legal-documents.json').version}});} // consent step no longer reads /me
    if(path==='/api/me') {

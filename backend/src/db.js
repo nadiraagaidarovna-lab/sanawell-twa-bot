@@ -548,6 +548,18 @@ async function recordConsentWithdrawal(telegramId, { documents, version, source 
   }
 }
 
+// Interaction analytics (backend/migrations/20261007_app_events.sql): already validated events
+// with a pseudonymous identifier only — no telegram_id column.
+async function insertAppEvents(pseudonym, events) {
+  for (const e of events) {
+    await pool.query(
+      `INSERT INTO app_events (pseudonym, event, step, section, error_kind, doc, seconds)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [pseudonym, e.name, e.step ?? null, e.section ?? null, e.errorKind ?? null, e.doc ?? null, e.seconds ?? null]
+    );
+  }
+}
+
 async function setReminderOptIn(telegramId, optIn) {
   await touchOrCreateUser(telegramId);
   await pool.query('UPDATE users SET reminder_opt_in = $1 WHERE telegram_id = $2', [
@@ -719,6 +731,7 @@ module.exports = {
   getLatestConsentEvents,
   recordConsentGrants,
   recordConsentWithdrawal,
+  insertAppEvents,
   setReminderOptIn,
   setHabitsReminderOptIn,
   setDisplayName,

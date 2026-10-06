@@ -5,6 +5,7 @@ const { getAllProtocols } = require('./protocols');
 const { detectRiskTrigger, getSafetyResources } = require('./safety');
 const { buildWeeklyReport } = require('./weeklyReport');
 const consent = require('./consent');
+const analytics = require('./analytics');
 
 // Which onboarding an unfinished account gets. v2_all — the new flow for everyone;
 // v2_allowlist — the new flow for ONBOARDING_TESTER_IDS only; paused — no onboarding questions
@@ -409,6 +410,31 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         }
         throw error;
       }
+    })
+  );
+
+  // Interaction analytics, only after a current consent. Strict whitelist (analytics.js): one
+  // invalid event rejects the whole batch. Stored with a pseudonymous identifier, never the ID.
+  router.post(
+    '/events',
+    requireAuth,
+    consentGate,
+    asyncHandler(async (req, res) => {
+      const { events } = req.body || {};
+      if (!Array.isArray(events) || events.length === 0 || events.length > analytics.MAX_BATCH) {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      const valid = events.map(analytics.validateEvent);
+      if (valid.some((event) => event === null)) return res.status(400).json({ error: 'invalid_event' });
+      const pseudonym = analytics.pseudonymFor(req.telegramId);
+      if (!pseudonym) return res.status(503).json({ error: 'analytics_unavailable' });
+      try {
+        await db.insertAppEvents(pseudonym, valid);
+      } catch (error) {
+        if (error.code === consent.UNDEFINED_TABLE) return res.status(503).json({ error: 'analytics_unavailable' });
+        throw error;
+      }
+      res.json({ ok: true, accepted: valid.length });
     })
   );
 

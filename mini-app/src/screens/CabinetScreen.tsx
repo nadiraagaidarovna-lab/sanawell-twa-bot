@@ -13,6 +13,7 @@ import { formatDate, pluralDays } from '../lib/progressFormat';
 import BottomNav from '../components/BottomNav';
 import { legalDocumentTitle, legalDocumentUrl, type LegalDocumentKey } from '../lib/legalDocuments';
 import { withdrawConsents } from '../lib/onboardingFocusGroup';
+import { track } from '../lib/analytics';
 
 interface MeResponse {
   consents?: { current?: boolean };
@@ -295,7 +296,7 @@ export default function CabinetScreen() {
                 (single source: lib/legal-documents.json). */}
             {(['privacy', 'terms', 'dataConsent'] as LegalDocumentKey[]).map((key) => (
               <a key={key} className="cabinet-link" href={legalDocumentUrl(key)}
-                target="_blank" rel="noopener noreferrer">
+                target="_blank" rel="noopener noreferrer" onClick={() => track({ name: 'legal_doc_open', doc: key })}>
                 {legalDocumentTitle(key)}
               </a>
             ))}

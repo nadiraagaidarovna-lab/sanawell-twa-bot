@@ -37,6 +37,7 @@ async function setup(env = {}) {
   await pg.exec(cycleMigration);
   await pg.exec(consentMigration);
   await pg.exec(profileSourceMigration);
+  await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations/20261007_app_events.sql'), 'utf8'));
   const saved = {};
   for (const [key, value] of Object.entries(env)) { saved[key] = process.env[key]; process.env[key] = value; }
   const { buildRouter } = load('routes.js', { './db': db });
@@ -233,4 +234,53 @@ test('withdrawal blocks new writes, keeps documents, own data and the deletion r
     assert.equal((await request('/anketa/age', { age: 48 })).status, 200);
     assert.equal((await db.getUser('101')).reminder_opt_in, 0); // not silently re-enabled
   } finally { await close(); }
+});
+
+test('analytics: only after consent, closed whitelist, pseudonymous identifier, no values', async () => {
+  const savedToken = process.env.BOT_TOKEN; process.env.BOT_TOKEN = TOKEN;
+  const { pg, request, close } = await setup();
+  try {
+    const good = [
+      { name: 'onboarding_step_view', step: 3 }, { name: 'onboarding_step_done', step: 3 },
+      { name: 'onboarding_error', step: 4, errorKind: 'network' }, { name: 'onboarding_completed' },
+      { name: 'section_open', section: 'home' }, { name: 'section_active_time', section: 'guide', seconds: 42 },
+      { name: 'legal_doc_open', doc: 'privacy' },
+    ];
+    assert.equal((await request('/events', { events: good })).status, 403); // before consent
+    assert.equal((await pg.query('SELECT count(*)::int n FROM app_events')).rows[0].n, 0);
+    assert.equal((await request('/consents', GRANT)).status, 200);
+    for (const bad of [
+      { name: 'onboarding_step_view', step: 3, answer: 'regular' },     // extra field
+      { name: 'onboarding_step_done', step: 3, value: 49 },
+      { name: 'section_open', section: 'home', text: 'мне плохо' },
+      { name: 'section_open', section: 'anketa-symptoms' },             // not a section
+      { name: 'section_active_time', section: 'home', seconds: 0 },
+      { name: 'section_active_time', section: 'home', seconds: 3601 },
+      { name: 'section_active_time', section: 'home', seconds: 1.5 },
+      { name: 'onboarding_step_view', step: 7 },
+      { name: 'onboarding_error', step: 2, errorKind: 'Не удалось' },
+      { name: 'legal_doc_open', doc: 'https://example.com' },
+      { name: 'checkin_saved', sleep: 5 },                              // unknown event
+      { name: 'onboarding_completed', step: 6 },
+    ]) {
+      assert.equal((await request('/events', { events: [good[0], bad] })).status, 400, JSON.stringify(bad));
+    }
+    assert.equal((await request('/events', { events: [] })).status, 400);
+    assert.equal((await request('/events', { events: Array(21).fill(good[4]) })).status, 400);
+    assert.equal((await pg.query('SELECT count(*)::int n FROM app_events')).rows[0].n, 0); // rejected batches store nothing
+    const ok = await request('/events', { events: good });
+    assert.equal(ok.status, 200); assert.equal(ok.body.accepted, good.length);
+    const rows = (await pg.query('SELECT * FROM app_events ORDER BY id')).rows;
+    assert.equal(rows.length, good.length);
+    const columns = Object.keys(rows[0]).sort();
+    assert.deepEqual(columns, ['created_at', 'doc', 'error_kind', 'event', 'id', 'pseudonym', 'seconds', 'section', 'step']);
+    assert(rows.every(r => /^[0-9a-f]{64}$/.test(r.pseudonym) && r.pseudonym === rows[0].pseudonym));
+    assert(!rows[0].pseudonym.includes('101'));
+    const other = await request('/consents', GRANT, 202); assert.equal(other.status, 200);
+    await request('/events', { events: [good[4]] }, 202);
+    const pseudonyms = (await pg.query('SELECT DISTINCT pseudonym FROM app_events')).rows;
+    assert.equal(pseudonyms.length, 2); // stable per woman, different between women
+    assert.equal((await request('/consents/withdraw', {})).status, 200);
+    assert.equal((await request('/events', { events: [good[4]] })).status, 403); // stops after withdrawal
+  } finally { await close(); if (savedToken === undefined) delete process.env.BOT_TOKEN; else process.env.BOT_TOKEN = savedToken; }
 });

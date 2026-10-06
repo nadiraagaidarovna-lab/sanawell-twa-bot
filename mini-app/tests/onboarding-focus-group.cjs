@@ -61,7 +61,7 @@ async function normalRead(route, path, checkin = null) {
     ]) {
       const page = await telegramPage(browser); const record = recordFor(overrides); const errors = [];
       page.on('pageerror', e => errors.push(e.message));
-      await page.route('**/api/**', route => {
+      await page.route('**/api/**', route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); } 
         assert.equal(route.request().method(), 'GET');
         const path = new URL(route.request().url()).pathname;
         return path === '/api/me' ? route.fulfill({ json: record }) : normalRead(route, path);
@@ -74,7 +74,7 @@ async function normalRead(route, path, checkin = null) {
     }
     {
       const page = await telegramPage(browser); let failing = true;
-      await page.route('**/api/**', route => {
+      await page.route('**/api/**', route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); } 
         const path = new URL(route.request().url()).pathname;
         if (path === '/api/me') return failing ? route.fulfill({ status: 503, json: {} }) : route.fulfill({ json: recordFor({}) });
         return normalRead(route, path);
@@ -89,7 +89,7 @@ async function normalRead(route, path, checkin = null) {
       // «Показать приветствие снова»: the new welcome page, view only, no writes.
       const page = await telegramPage(browser); const writes = [];
       const record = recordFor({ onboardingWelcomeSeen: true, onboardingAnketaCompleted: true, consents: { current: true } });
-      await page.route('**/api/**', route => {
+      await page.route('**/api/**', route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); } 
         const request = route.request(), path = new URL(request.url()).pathname;
         if (request.method() !== 'GET') { writes.push(path); return route.fulfill({ json: { ok: true } }); }
         return path === '/api/me' ? route.fulfill({ json: record }) : normalRead(route, path);
@@ -113,7 +113,7 @@ async function normalRead(route, path, checkin = null) {
       const page = await telegramPage(browser); const writes = [];
       const record = recordFor({ onboardingWelcomeSeen: true, onboardingAnketaCompleted: true, consents: { current: true }, reminderOptIn: true });
       let failWithdraw = true;
-      await page.route('**/api/**', route => {
+      await page.route('**/api/**', route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); } 
         const request = route.request(), path = new URL(request.url()).pathname;
         if (request.method() === 'GET') return path === '/api/me' ? route.fulfill({ json: record }) : normalRead(route, path);
         writes.push(path);
@@ -155,7 +155,7 @@ async function normalRead(route, path, checkin = null) {
       const barrier = new Promise(resolve => { release = resolve; });
       const waiting = new Promise(resolve => { started = resolve; });
       page.on('pageerror', e => errors.push(e.message));
-      await page.route('**/api/**', async route => {
+      await page.route('**/api/**', async route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); } 
         const request = route.request(), path = new URL(request.url()).pathname;
         if (path === '/api/me') {
           if (finalStep && !failed && ['status-fails','invalid-status'].includes(scenario)) {

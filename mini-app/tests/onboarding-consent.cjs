@@ -16,7 +16,7 @@ const EXPECTED = { version: legal.version, documents: ['terms', 'privacy_data_co
       let current = scenario === 'already-current';
       const writes = []; const errors = []; let failed = false;
       page.on('pageerror', error => errors.push(error.message));
-      await page.route('**/api/**', async route => {
+      await page.route('**/api/**', async route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); } 
         const request = route.request(); const url = new URL(request.url()).pathname;
         assert('x-telegram-init-data' in request.headers());
         if (url === '/api/me') return route.fulfill({ json: { onboardingVersion: 'v2', onboardingAnketaCompleted: false, onboardingWelcomeSeen: false, displayName: null, age: null, consents: { current } } });
@@ -62,7 +62,7 @@ const EXPECTED = { version: legal.version, documents: ['terms', 'privacy_data_co
       const waiting = new Promise(resolve => { started = resolve; });
       const barrier = new Promise(resolve => { release = resolve; });
       const writes = [];
-      await page.route('**/api/**', async route => {
+      await page.route('**/api/**', async route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); } 
         const url = new URL(route.request().url()).pathname;
         if (url === '/api/me') return route.fulfill({ json: { onboardingVersion: 'v2', onboardingAnketaCompleted: false, onboardingWelcomeSeen: false, displayName: null, age: null } });
         writes.push(url); started(); await barrier;
@@ -85,7 +85,7 @@ const EXPECTED = { version: legal.version, documents: ['terms', 'privacy_data_co
 
     {
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-      await page.route('**/api/**', route => { if (new URL(route.request().url()).pathname === '/api/me') return route.fulfill({ json: { onboardingVersion: 'v2', onboardingAnketaCompleted: false, onboardingWelcomeSeen: false } }); throw new Error(`Unexpected API request while reading documents: ${route.request().url()}`); });
+      await page.route('**/api/**', route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); }  if (new URL(route.request().url()).pathname === '/api/me') return route.fulfill({ json: { onboardingVersion: 'v2', onboardingAnketaCompleted: false, onboardingWelcomeSeen: false } }); throw new Error(`Unexpected API request while reading documents: ${route.request().url()}`); });
       await page.goto(`${base}`);
       await page.getByRole('button', { name: 'Начать мою историю 360°' }).click();
       for (const [key, title] of Object.entries(legal.documents).map(([k, d]) => [k, d.title])) {

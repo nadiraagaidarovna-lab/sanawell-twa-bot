@@ -14,7 +14,7 @@ const mhtKeys = ['current','no','considering','previous','prefer_not_to_say'];
       const record = { onboardingVersion:'v2',onboardingAnketaCompleted:false,onboardingWelcomeSeen:false,medicalDisclaimerConsented: true, dataStorageConsented: true, displayName: 'Надира', age: 49, cycleSituation: scenario === 'existing' ? 'post_surgery' : null, mhtStatus: scenario === 'existing' ? 'previous' : null };
       if (scenario === 'restore-after-lost-response') record.mhtStatus = 'no';
       page.on('pageerror', error => errors.push(error.message));
-      await page.route('**/api/**', async route => {
+      await page.route('**/api/**', async route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); } 
         const path = new URL(route.request().url()).pathname;
         assert('x-telegram-init-data' in route.request().headers());
         if(path==='/api/consents'){consented=true;return route.fulfill({json:{ok:true,current:true,version:require('../src/lib/legal-documents.json').version}});} // consent step no longer reads /me

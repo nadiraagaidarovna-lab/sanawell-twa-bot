@@ -1,5 +1,6 @@
 import { apiFetch } from './api';
 import { LEGAL_DOCUMENTS_VERSION, REQUIRED_CONSENT_DOCUMENTS } from './legalDocuments';
+import { setAnalyticsEnabled } from './analytics';
 
 // Which onboarding a woman gets is decided by the server (/me onboardingVersion), so the
 // regular bot button opens it; no special link or start_param is needed any more.
@@ -16,6 +17,7 @@ export async function saveConsents(source: ConsentSource): Promise<void> {
   if (result.ok !== true || result.current !== true || result.version !== LEGAL_DOCUMENTS_VERSION) {
     throw new Error('Consent save not confirmed');
   }
+  setAnalyticsEnabled(true);
 }
 
 // Withdraws both documents. Resolves only when the server no longer reports any current consent.
@@ -25,6 +27,7 @@ export async function withdrawConsents(): Promise<void> {
   if (result.ok !== true || result.current !== false || result.terms || result.privacyDataConsent) {
     throw new Error('Withdrawal not confirmed');
   }
+  setAnalyticsEnabled(false);
 }
 
 // Called only by the normal app's focus-group route, never the development preview.

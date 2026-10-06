@@ -6,6 +6,7 @@ import { useMainButton } from '../../lib/useMainButton';
 import { apiFetch } from '../../lib/api';
 import { legalDocumentTitle, legalDocumentUrl } from '../../lib/legalDocuments';
 import { saveConsents } from '../../lib/onboardingFocusGroup';
+import { errorKindOf, track } from '../../lib/analytics';
 import './OnboardingFlow.css';
 
 // Self-descriptions only. Never translate these keys into a medical stage or path.
@@ -187,9 +188,11 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
         // Versioned, server-confirmed record (consent_events). The server does not duplicate
         // an already-current consent, so a retry after a lost response is safe.
         await saveConsents(consentOnly ? 'reconsent' : 'onboarding_v2');
+        stepDone(1);
         if (consentOnly) await onCheckin();
         else setStep(2);
-      } catch {
+      } catch (error) {
+        stepError(1, error);
         setConsentError('Не удалось подтвердить сохранение согласий. Попробуйте ещё раз.');
       } finally {
         consentInFlight.current = false;
@@ -221,8 +224,10 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
         }
         setName(savedProfile.current.displayName ?? '');
         setAge(savedProfile.current.age === null ? '' : String(savedProfile.current.age));
+        stepDone(2);
         setStep(3);
-      } catch {
+      } catch (error) {
+        stepError(2, error);
         setProfileError('Не удалось сохранить. Попробуйте ещё раз.');
       } finally {
         profileInFlight.current = false;
@@ -244,8 +249,10 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
           if (result.ok !== true) throw new Error('Answer save not confirmed');
           savedAnswers.current[field] = value;
         }
+        stepDone(step);
         setStep(step + 1);
-      } catch {
+      } catch (error) {
+        stepError(step, error);
         // A write may have succeeded even if its response was lost. Do not skip
         // a retry based on an older cached value, including a reselected answer.
         savedAnswers.current[field] = '';
@@ -262,13 +269,14 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
       setCompletionError('');
       try {
         await onCheckin();
-      } catch {
+      } catch (error) {
+        stepError(5, error);
         setCompletionError('Не удалось завершить сохранение. Попробуйте ещё раз.');
       } finally {
         completionInFlight.current = false;
         setFinishing(false);
       }
-    } else setStep(step + 1);
+    } else { stepDone(step); setStep(step + 1); }
   };
   const cta = step === 0 ? 'Начать мою историю 360°' : step === 5 ? 'Отметить самочувствие →' : 'Продолжить';
 
@@ -277,7 +285,13 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
     window.scrollTo(0, 0);
-  }, [step]);
+    // Dropped while there is no consent (analytics is off), so steps 1–2 are not recorded.
+    if (!consentOnly) track({ name: 'onboarding_step_view', step: step + 1 });
+  }, [step, consentOnly]);
+  const stepDone = (index: number) => { if (!consentOnly) track({ name: 'onboarding_step_done', step: index + 1 }); };
+  const stepError = (index: number, error: unknown) => {
+    if (!consentOnly) track({ name: 'onboarding_error', step: index + 1, errorKind: errorKindOf(error) });
+  };
 
   return <main className="sw-onboarding" lang="ru">
     {!consentOnly && <><header className="sw-onboarding-header">
@@ -296,14 +310,14 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
         <div className="sw-onboarding-option sw-onboarding-consent">
           <input id="onboarding-terms" type="checkbox" checked={terms} disabled={savingConsent} onChange={(event) => { if (!consentInFlight.current) setTerms(event.target.checked); }} />
           <div><label htmlFor="onboarding-terms">Я принимаю Условия использования.</label>
-            <a className="sw-onboarding-link" href={legalDocumentUrl('terms')} target="_blank" rel="noopener noreferrer">{legalDocumentTitle('terms')}</a>
+            <a className="sw-onboarding-link" href={legalDocumentUrl('terms')} target="_blank" rel="noopener noreferrer" onClick={() => track({ name: 'legal_doc_open', doc: 'terms' })}>{legalDocumentTitle('terms')}</a>
           </div>
         </div>
         <div className="sw-onboarding-option sw-onboarding-consent">
           <input id="onboarding-privacy" type="checkbox" checked={privacy} disabled={savingConsent} onChange={(event) => { if (!consentInFlight.current) setPrivacy(event.target.checked); }} />
           <div><label htmlFor="onboarding-privacy">Я ознакомилась с Политикой конфиденциальности и даю согласие на сбор и обработку персональных данных.</label>
-            <a className="sw-onboarding-link" href={legalDocumentUrl('privacy')} target="_blank" rel="noopener noreferrer">{legalDocumentTitle('privacy')}</a>
-            <a className="sw-onboarding-link" href={legalDocumentUrl('dataConsent')} target="_blank" rel="noopener noreferrer">{legalDocumentTitle('dataConsent')}</a>
+            <a className="sw-onboarding-link" href={legalDocumentUrl('privacy')} target="_blank" rel="noopener noreferrer" onClick={() => track({ name: 'legal_doc_open', doc: 'privacy' })}>{legalDocumentTitle('privacy')}</a>
+            <a className="sw-onboarding-link" href={legalDocumentUrl('dataConsent')} target="_blank" rel="noopener noreferrer" onClick={() => track({ name: 'legal_doc_open', doc: 'dataConsent' })}>{legalDocumentTitle('dataConsent')}</a>
           </div>
         </div>
         <p className="sw-onboarding-note">Документы — рабочие проекты для закрытой MVP-фокус-группы. Перед публичным запуском требуется финальная юридическая проверка.</p>

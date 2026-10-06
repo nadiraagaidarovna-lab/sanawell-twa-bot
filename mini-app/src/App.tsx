@@ -18,6 +18,7 @@ import { useNavigation } from './lib/useNavigation';
 import { useBackButton } from './lib/useBackButton';
 import { apiFetch } from './lib/api';
 import { completeFocusGroupOnboarding } from './lib/onboardingFocusGroup';
+import { setAnalyticsEnabled, track, useSectionAnalytics } from './lib/analytics';
 import OnboardingFlow, { OnboardingNotice, OnboardingWelcomeAgain } from './screens/onboarding/OnboardingFlow';
 import { getTelegramLanguageCode } from './lib/telegram';
 import WelcomeScreen from './screens/WelcomeScreen';
@@ -77,6 +78,11 @@ const ANKETA_STEPS: ScreenId[] = [
   'anketa-lifestyle',
   'anketa-symptoms',
 ];
+
+// Sections counted by analytics (open + active time). Onboarding and legacy questionnaire
+// screens are not sections: onboarding steps have their own events.
+const ANALYTICS_SECTIONS: ScreenId[] = ['home', 'checkin', 'progress', 'techniques', 'partners', 'guide',
+  'body', 'ai-assistant', 'cabinet', 'profile-edit', 'tariff', 'welcome-again', 'reconsent'];
 
 function isAnketaStep(screen: ScreenId): boolean {
   return (ANKETA_STEPS as string[]).includes(screen);
@@ -173,6 +179,7 @@ function Screens({
   };
 
   useBackButton(checkinResult ? closeCheckinResult : canGoBack ? back : null);
+  useSectionAnalytics(checkinResult ? 'checkin-result' : ANALYTICS_SECTIONS.includes(screen) ? screen : null);
 
   if (checkinResult) {
     return <CheckinResultScreen checkin={checkinResult} onDone={closeCheckinResult}
@@ -187,6 +194,7 @@ function Screens({
     case 'onboarding-focus-group':
       return <OnboardingFlow onCheckin={async () => {
         await completeFocusGroupOnboarding();
+        track({ name: 'onboarding_completed' });
         // Remove the entire onboarding history. Back from Check-in leads to Home.
         reset('home');
         push('checkin');
@@ -263,6 +271,8 @@ function App() {
     apiFetch<MeGateResponse>('/me')
       .then((me) => {
         if (cancelled) return;
+        // Interaction analytics only with a current consent.
+        setAnalyticsEnabled(me.consents?.current === true);
 
         const consentNextScreen: ScreenId = afterConsentScreen(me);
         const welcomeNextScreen: ScreenId = needsConsent(me) ? 'consent' : consentNextScreen;
