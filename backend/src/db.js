@@ -473,6 +473,54 @@ async function setDataStorageConsent(telegramId, consented) {
   ]);
 }
 
+// Versioned consent journal (backend/migrations/20261006_consent_events.sql): the latest row
+// per document decides the status, see consent.js. Rows are only ever appended.
+async function getLatestConsentEvents(telegramId) {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ON (document) document, document_version, action
+     FROM consent_events
+     WHERE telegram_id = $1
+     ORDER BY document, id DESC`,
+    [String(telegramId)]
+  );
+  return rows;
+}
+
+// One transaction for all documents of a confirmation: either every document is recorded or
+// none. Legacy *_consent_at columns are filled only when empty (older code paths still read
+// them); existing timestamps are never overwritten.
+async function recordConsentGrants(telegramId, { documents, version, source }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      'INSERT INTO users (telegram_id) VALUES ($1) ON CONFLICT (telegram_id) DO NOTHING',
+      [String(telegramId)]
+    );
+    for (const document of documents) {
+      await client.query(
+        `INSERT INTO consent_events (telegram_id, document, document_version, action, source)
+         VALUES ($1, $2, $3, 'granted', $4)`,
+        [String(telegramId), document, version, source]
+      );
+    }
+    const now = new Date().toISOString();
+    await client.query(
+      `UPDATE users SET
+         medical_disclaimer_consent_at = COALESCE(medical_disclaimer_consent_at, $1),
+         data_storage_consent_at = COALESCE(data_storage_consent_at, $1)
+       WHERE telegram_id = $2`,
+      [now, String(telegramId)]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function setReminderOptIn(telegramId, optIn) {
   await touchOrCreateUser(telegramId);
   await pool.query('UPDATE users SET reminder_opt_in = $1 WHERE telegram_id = $2', [
@@ -641,6 +689,8 @@ module.exports = {
   setMenopausePath,
   setMedicalDisclaimerConsent,
   setDataStorageConsent,
+  getLatestConsentEvents,
+  recordConsentGrants,
   setReminderOptIn,
   setHabitsReminderOptIn,
   setDisplayName,

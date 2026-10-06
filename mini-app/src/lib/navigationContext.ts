@@ -8,6 +8,8 @@ import { createContext } from 'react';
 // навигации главного экрана v2.
 export type ScreenId =
   | 'onboarding-focus-group'
+  | 'reconsent'
+  | 'onboarding-paused'
   | 'welcome'
   | 'consent'
   | 'anketa-name'

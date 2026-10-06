@@ -1,12 +1,20 @@
 import { apiFetch } from './api';
-import { getInitDataRaw } from './telegram';
+import { LEGAL_DOCUMENTS_VERSION, REQUIRED_CONSENT_DOCUMENTS } from './legalDocuments';
 
-export function requestedFocusGroupOnboarding(): boolean {
-  if (new URLSearchParams(window.location.search).get('onboarding') === 'focus-group') return true;
-  try {
-    return new URLSearchParams(getInitDataRaw() ?? '').get('start_param') === 'onboarding_focus_group';
-  } catch {
-    return false;
+// Which onboarding a woman gets is decided by the server (/me onboardingVersion), so the
+// regular bot button opens it; no special link or start_param is needed any more.
+
+export type ConsentSource = 'onboarding_v2' | 'legacy_consent_screen' | 'reconsent';
+
+// Confirms both onboarding documents for the version whose links were shown. Resolves only
+// after the server reports a current consent; anything else is an error for the caller to show.
+export async function saveConsents(source: ConsentSource): Promise<void> {
+  const result = await apiFetch<{ ok: boolean; current: boolean; version: string }>('/consents', {
+    method: 'POST',
+    body: JSON.stringify({ version: LEGAL_DOCUMENTS_VERSION, documents: REQUIRED_CONSENT_DOCUMENTS, source }),
+  });
+  if (result.ok !== true || result.current !== true || result.version !== LEGAL_DOCUMENTS_VERSION) {
+    throw new Error('Consent save not confirmed');
   }
 }
 

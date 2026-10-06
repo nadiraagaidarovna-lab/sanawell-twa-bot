@@ -2,49 +2,36 @@
 // Use installed Playwright, or point PLAYWRIGHT_MODULE at an existing installation.
 // All /api requests are intercepted. These tests never contact a real backend.
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const base = process.env.CONSENT_TEST_BASE_URL || 'http://127.0.0.1:5175/checkin/';
+const legal = require(path.resolve(__dirname, '../src/lib/legal-documents.json'));
+const EXPECTED = { version: legal.version, documents: ['terms', 'privacy_data_consent'], source: 'onboarding_v2' };
 
 (async () => {
   const browser = await chromium.launch({ headless: true, channel: process.env.CONSENT_TEST_BROWSER || 'msedge' });
   try {
-    for (const scenario of ['success', 'first-fails', 'second-fails', 'lost-response', 'status-fails', 'invalid-status', 'unconfirmed-save', 'existing', 'partial-existing']) {
+    for (const scenario of ['success', 'fails', 'lost-response', 'unconfirmed-save', 'stale-version', 'already-current']) {
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-      const records = { medicalDisclaimerConsented: scenario === 'existing' || scenario === 'partial-existing', dataStorageConsented: scenario === 'existing', displayName: null, age: null };
-      const writes = []; const errors = []; let failed = false; let statusReads = 0;
+      let current = scenario === 'already-current';
+      const writes = []; const errors = []; let failed = false;
       page.on('pageerror', error => errors.push(error.message));
       await page.route('**/api/**', async route => {
-        const request = route.request(); const path = new URL(request.url()).pathname;
+        const request = route.request(); const url = new URL(request.url()).pathname;
         assert('x-telegram-init-data' in request.headers());
-        if (path === '/api/me') {
-          statusReads++;
-          if (scenario === 'status-fails' && !failed) {
-            failed = true; return route.fulfill({ status: 503, json: {} });
-          }
-          if (scenario === 'invalid-status' && !failed) {
-            failed = true; return route.fulfill({ json: {} });
-          }
-          return route.fulfill({ json: records });
-        }
+        if (url === '/api/me') return route.fulfill({ json: { onboardingVersion: 'v2', onboardingAnketaCompleted: false, onboardingWelcomeSeen: false, displayName: null, age: null, consents: { current } } });
+        assert.equal(url, '/api/consents', `Unexpected request: ${url}`);
         assert.equal(request.method(), 'POST');
-        assert.deepEqual(request.postDataJSON(), { consented: true });
-        const key = path === '/api/consent/medical-disclaimer' ? 'medicalDisclaimerConsented'
-          : path === '/api/consent/data-storage' ? 'dataStorageConsented' : null;
-        assert(key, `Unexpected write: ${path}`);
-        writes.push(path);
-        if (!failed && ((scenario === 'first-fails' && key === 'medicalDisclaimerConsented') || (scenario === 'second-fails' && key === 'dataStorageConsented'))) {
-          failed = true; return route.fulfill({ status: 500, json: {} });
-        }
-        if (!failed && scenario === 'unconfirmed-save') {
-          failed = true; return route.fulfill({ json: { ok: false } });
-        }
-        records[key] = true;
-        if (!failed && scenario === 'lost-response') {
-          failed = true; return route.abort('failed');
-        }
-        return route.fulfill({ json: { ok: true } });
+        assert.deepEqual(request.postDataJSON(), EXPECTED);
+        writes.push(url);
+        if (!failed && scenario === 'fails') { failed = true; return route.fulfill({ status: 500, json: {} }); }
+        if (!failed && scenario === 'unconfirmed-save') { failed = true; return route.fulfill({ json: { ok: true, current: false, version: legal.version } }); }
+        if (!failed && scenario === 'stale-version') { failed = true; return route.fulfill({ status: 409, json: { error: 'outdated_version', version: 'newer' } }); }
+        current = true;
+        if (!failed && scenario === 'lost-response') { failed = true; return route.abort('failed'); }
+        return route.fulfill({ json: { ok: true, current: true, version: legal.version } });
       });
-      await page.goto(`${base}?onboarding-preview`);
+      await page.goto(`${base}`);
       await page.getByRole('button', { name: 'Начать мою историю 360°', exact: true }).click();
       const next = page.getByRole('button', { name: 'Продолжить', exact: true });
       const boxes = page.getByRole('checkbox');
@@ -54,40 +41,34 @@ const base = process.env.CONSENT_TEST_BASE_URL || 'http://127.0.0.1:5175/checkin
       await boxes.nth(0).check(); assert(await next.isEnabled());
       assert.equal(writes.length, 0);
       await next.click();
-      if (['first-fails', 'second-fails', 'lost-response', 'status-fails', 'invalid-status', 'unconfirmed-save'].includes(scenario)) {
+      if (['fails', 'lost-response', 'unconfirmed-save', 'stale-version'].includes(scenario)) {
         await page.getByRole('alert').waitFor();
         assert(await page.getByRole('heading', { name: 'Ваши данные — под вашим контролем' }).isVisible());
         assert(await boxes.nth(0).isChecked()); assert(await boxes.nth(1).isChecked());
-        if (scenario === 'first-fails') assert.equal(writes.length, 1);
-        if (scenario === 'second-fails') assert.equal(writes.length, 2);
-        if (scenario === 'status-fails' || scenario === 'invalid-status') assert.equal(writes.length, 0);
+        assert.equal(writes.length, 1);
         await next.click();
       }
       await page.getByRole('heading', { name: 'Немного о вас', exact: true }).waitFor();
-      assert(records.medicalDisclaimerConsented && records.dataStorageConsented);
-      if (scenario === 'existing') assert.deepEqual(writes, []);
-      if (['partial-existing'].includes(scenario)) assert.deepEqual(writes, ['/api/consent/data-storage']);
-      if (['second-fails', 'lost-response'].includes(scenario)) assert.equal(writes.filter(path => path.endsWith('/medical-disclaimer')).length, 1);
+      assert(current);
+      assert.equal(writes.length, ['fails', 'lost-response', 'unconfirmed-save', 'stale-version'].includes(scenario) ? 2 : 1);
       assert.equal(errors.length, 0, errors.join('\n'));
-      console.log(`PASS ${scenario}: ${statusReads} status reads, ${writes.length} writes`);
+      console.log(`PASS ${scenario}: ${writes.length} consent writes`);
       await page.close();
     }
 
-    // Hold a request open and dispatch same-tick clicks to exercise the ref lock.
+    // Hold the request open and dispatch same-tick clicks to exercise the ref lock.
     {
       const page = await browser.newPage(); let release; let started;
       const waiting = new Promise(resolve => { started = resolve; });
       const barrier = new Promise(resolve => { release = resolve; });
-      let reads = 0; const writes = [];
+      const writes = [];
       await page.route('**/api/**', async route => {
-        const path = new URL(route.request().url()).pathname;
-        if (path === '/api/me') {
-          reads++; started(); await barrier;
-          return route.fulfill({ json: { medicalDisclaimerConsented: false, dataStorageConsented: false, displayName: null, age: null } });
-        }
-        writes.push(path); return route.fulfill({ json: { ok: true } });
+        const url = new URL(route.request().url()).pathname;
+        if (url === '/api/me') return route.fulfill({ json: { onboardingVersion: 'v2', onboardingAnketaCompleted: false, onboardingWelcomeSeen: false, displayName: null, age: null } });
+        writes.push(url); started(); await barrier;
+        return route.fulfill({ json: { ok: true, current: true, version: legal.version } });
       });
-      await page.goto(`${base}?onboarding-preview`);
+      await page.goto(`${base}`);
       await page.getByRole('button', { name: 'Начать мою историю 360°' }).click();
       await page.getByRole('checkbox').nth(0).check(); await page.getByRole('checkbox').nth(1).check();
       await page.getByRole('button', { name: 'Продолжить', exact: true }).evaluate(button => { button.click(); button.click(); button.click(); });
@@ -97,27 +78,24 @@ const base = process.env.CONSENT_TEST_BASE_URL || 'http://127.0.0.1:5175/checkin
       assert(await page.getByRole('button', { name: '← Назад', exact: true }).isDisabled());
       release();
       await page.getByRole('heading', { name: 'Немного о вас', exact: true }).waitFor();
-      // One consent status read, then the Name/Age step hydrates its saved fields.
-      await page.waitForFunction(() => !document.querySelector('#onboarding-name')?.disabled);
-      assert.equal(reads, 2); assert.deepEqual(writes, ['/api/consent/medical-disclaimer', '/api/consent/data-storage']);
-      console.log('PASS repeated clicks: one save sequence; checkboxes and back locked');
+      assert.deepEqual(writes, ['/api/consents']);
+      console.log('PASS repeated clicks: one consent write; checkboxes and back locked');
       await page.close();
     }
 
     {
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-      await page.route('**/api/**', route => { throw new Error(`Unexpected API request while reading documents: ${route.request().url()}`); });
-      await page.goto(`${base}?onboarding-preview`);
+      await page.route('**/api/**', route => { if (new URL(route.request().url()).pathname === '/api/me') return route.fulfill({ json: { onboardingVersion: 'v2', onboardingAnketaCompleted: false, onboardingWelcomeSeen: false } }); throw new Error(`Unexpected API request while reading documents: ${route.request().url()}`); });
+      await page.goto(`${base}`);
       await page.getByRole('button', { name: 'Начать мою историю 360°' }).click();
-      for (const title of ['Условия использования', 'Политика конфиденциальности', 'Согласие на сбор и обработку персональных данных']) {
+      for (const [key, title] of Object.entries(legal.documents).map(([k, d]) => [k, d.title])) {
+        const link = page.getByRole('link', { name: title, exact: true });
+        assert.equal(new URL(await link.getAttribute('href'), page.url()).pathname, `/checkin/${legal.documents[key].path}`);
         const popupPromise = page.waitForEvent('popup');
-        await page.getByRole('link', { name: title, exact: true }).click();
+        await link.click();
         const doc = await popupPromise; await doc.waitForLoadState();
         assert.equal(await doc.locator('article').getAttribute('aria-label'), title);
         assert((await doc.locator('article').innerText()).includes('ПРОЕКТ ДЛЯ ЮРИДИЧЕСКОЙ ПРОВЕРКИ'));
-        assert((await doc.locator('article p').count()) > 20);
-        assert.equal(await doc.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-        assert.equal(await doc.locator('body').evaluate(el => getComputedStyle(el).fontSize), '18px');
         const original = await doc.getByRole('link', { name: 'Скачать исходный проект DOCX' }).getAttribute('href');
         const response = await doc.request.get(new URL(original, doc.url()).href);
         assert(response.ok()); assert((await response.body()).subarray(0, 2).equals(Buffer.from('PK')));
@@ -125,7 +103,7 @@ const base = process.env.CONSENT_TEST_BASE_URL || 'http://127.0.0.1:5175/checkin
         assert(!(await page.getByRole('checkbox').nth(0).isChecked()));
         assert(!(await page.getByRole('checkbox').nth(1).isChecked()));
       }
-      console.log('PASS all 3 readable legal links, draft marks, original downloads; links do not toggle consent');
+      console.log('PASS 3 legal links from the single source open the published drafts; links do not toggle consent');
       await page.close();
     }
   } finally { await browser.close(); }

@@ -11,7 +11,7 @@ import { apiFetch, ApiError } from '../lib/api';
 import { useNavigation } from '../lib/useNavigation';
 import { formatDate, pluralDays } from '../lib/progressFormat';
 import BottomNav from '../components/BottomNav';
-import { POLICY_PLACEHOLDER_URL } from './ConsentScreen';
+import { legalDocumentTitle, legalDocumentUrl, type LegalDocumentKey } from '../lib/legalDocuments';
 
 interface MeResponse {
   onboarded: boolean;
@@ -269,24 +269,14 @@ export default function CabinetScreen() {
             <p className="cabinet-heading" style={{ marginTop: 16 }}>
               Документы
             </p>
-            {/* Та же ссылка-плейсхолдер, что на экране согласий (ЗАМЕНИТЬ перед публичным
-                запуском — см. ConsentScreen.tsx и CLAUDE.md). */}
-            <a
-              className="cabinet-link"
-              href={POLICY_PLACEHOLDER_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Политика конфиденциальности
-            </a>
-            <a
-              className="cabinet-link"
-              href={POLICY_PLACEHOLDER_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Пользовательское соглашение
-            </a>
+            {/* Same documents and addresses as the onboarding consent page
+                (single source: lib/legal-documents.json). */}
+            {(['privacy', 'terms', 'dataConsent'] as LegalDocumentKey[]).map((key) => (
+              <a key={key} className="cabinet-link" href={legalDocumentUrl(key)}
+                target="_blank" rel="noopener noreferrer">
+                {legalDocumentTitle(key)}
+              </a>
+            ))}
 
             {/* Срез О3 (ТЗ 6.2.1): ручной повторный показ Шага 0 — не трогает
                 onboarding_welcome_seen на бэкенде, только навигация. */}

@@ -6,14 +6,15 @@ const base = process.env.ONBOARDING_TEST_BASE_URL || 'http://127.0.0.1:5175/chec
  const browser = await chromium.launch({headless:true,channel:'msedge'});
  try {
  for (const scenario of ['new','existing','blank-preserves','name-fails','age-fails','load-fails','duplicate','validation','empty']) {
-  const page = await browser.newPage(); const writes=[]; let reads=0,failed=false,release,started;
+  const page = await browser.newPage(); const writes=[]; let reads=0,consented=false,failed=false,release,started;
   const barrier=new Promise(r=>release=r); const waiting=new Promise(r=>started=r);
-  const record={medicalDisclaimerConsented:true,dataStorageConsented:true,displayName:['existing','blank-preserves'].includes(scenario)?'Сохранённое имя':null,age:['existing','blank-preserves'].includes(scenario)?49:null,email:'unchanged@example.test',phone:'+77000000000',cycleSituation:null,mhtStatus:null};
+  const record={onboardingVersion:'v2',onboardingAnketaCompleted:false,onboardingWelcomeSeen:false,medicalDisclaimerConsented:true,dataStorageConsented:true,displayName:['existing','blank-preserves'].includes(scenario)?'Сохранённое имя':null,age:['existing','blank-preserves'].includes(scenario)?49:null,email:'unchanged@example.test',phone:'+77000000000',cycleSituation:null,mhtStatus:null};
   await page.route('**/api/**',async route=>{
    const path=new URL(route.request().url()).pathname;
+   if(path==='/api/consents'){consented=true;return route.fulfill({json:{ok:true,current:true,version:require('../src/lib/legal-documents.json').version}});} // consent step no longer reads /me
    if(path==='/api/me') {
-    reads++;
-    if(scenario==='load-fails' && reads===2){return route.fulfill({status:503,json:{}});}
+    if(consented) reads++;
+    if(scenario==='load-fails' && reads===1){return route.fulfill({status:503,json:{}});}
     return route.fulfill({json:record});
    }
    assert(['/api/anketa/name','/api/anketa/age'].includes(path),path);
@@ -24,7 +25,7 @@ const base = process.env.ONBOARDING_TEST_BASE_URL || 'http://127.0.0.1:5175/chec
    else {assert.deepEqual(Object.keys(data),['age']);record.age=data.age;}
    return route.fulfill({json:{ok:true}});
   });
-  await page.goto(`${base}?onboarding-preview`);
+  await page.goto(`${base}`);
   await page.getByRole('button',{name:'Начать мою историю 360°'}).click();
   await page.getByRole('checkbox').nth(0).check();await page.getByRole('checkbox').nth(1).check();
   await page.getByRole('button',{name:'Продолжить',exact:true}).click();

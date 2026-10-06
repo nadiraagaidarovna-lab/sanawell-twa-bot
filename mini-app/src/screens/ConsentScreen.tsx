@@ -16,17 +16,15 @@
 // Оба согласия обязательны (раздел 13 ТЗ) — кнопка "Продолжить" неактивна, пока не отмечены
 // оба чекбокса.
 import { useState } from 'react';
-import { apiFetch } from '../lib/api';
 import { useMainButton } from '../lib/useMainButton';
+import { legalDocumentTitle, legalDocumentUrl, type LegalDocumentKey } from '../lib/legalDocuments';
+import { saveConsents } from '../lib/onboardingFocusGroup';
 
 export type Lang = 'ru' | 'kk';
 
-// ЗАМЕНИТЬ на реальную ссылку на политику конфиденциальности/пользовательское соглашение
-// перед публичным запуском — плейсхолдер, см. CLAUDE.md. Реального документа пока нет
-// (задача Промпта 1/2 среза О5, раздел 13 ТЗ v2.13 отмечает это как открытую зависимость).
-// Экспортируется, чтобы «Личный кабинет» (CabinetScreen.tsx) показывал ту же ссылку, а не
-// заводил вторую: заменить плейсхолдер нужно будет в одном месте.
-export const POLICY_PLACEHOLDER_URL = 'about:blank';
+// Document links come from the single source lib/legal-documents.json (same as the new
+// onboarding and the cabinet). Titles stay in Russian: the documents exist only in Russian.
+const DOCUMENT_LINKS: LegalDocumentKey[] = ['terms', 'privacy', 'dataConsent'];
 
 const TEXT: Record<
   Lang,
@@ -38,6 +36,7 @@ const TEXT: Record<
     policyConsentLink: string;
     policyConsentAfter: string;
     button: string;
+    error: string;
   }
 > = {
   ru: {
@@ -48,6 +47,7 @@ const TEXT: Record<
     policyConsentLink: 'пользовательского соглашения и политики конфиденциальности',
     policyConsentAfter: '',
     button: 'Продолжить',
+    error: 'Не удалось сохранить согласие. Проверьте интернет и попробуйте ещё раз.',
   },
   kk: {
     title: 'Жалғастырмас бұрын',
@@ -57,6 +57,8 @@ const TEXT: Record<
     policyConsentLink: 'Пайдаланушы келісімі мен құпиялылық саясатын',
     policyConsentAfter: ' қабылдау',
     button: 'Жалғастыру',
+    // Черновой перевод, требует проверки носителем языка.
+    error: 'Келісімді сақтау мүмкін болмады. Интернетті тексеріп, қайталап көріңіз.',
   },
 };
 
@@ -70,6 +72,7 @@ export default function ConsentScreen({ lang, onLangChange, onNext }: ConsentScr
   const [dataConsent, setDataConsent] = useState(false);
   const [policyConsent, setPolicyConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   const t = TEXT[lang];
   const bothChecked = dataConsent && policyConsent;
@@ -77,14 +80,15 @@ export default function ConsentScreen({ lang, onLangChange, onNext }: ConsentScr
   const handleContinue = async () => {
     if (submitting || !bothChecked) return;
     setSubmitting(true);
+    setSaveError(false);
     try {
-      await Promise.all([
-        apiFetch('/consent/data-storage', { method: 'POST', body: JSON.stringify({ consented: true }) }),
-        apiFetch('/consent/medical-disclaimer', { method: 'POST', body: JSON.stringify({ consented: true }) }),
-      ]);
+      // Versioned, server-confirmed record. Without it the server rejects all further writes,
+      // so a failed save must stop here and be visible instead of silently moving on.
+      await saveConsents('legacy_consent_screen');
     } catch {
-      // Не блокируем переход сетевой ошибкой — тот же паттерн, что и в остальном онбординге
-      // (WelcomeScreen/экраны анкеты): хуже было бы запереть женщину на этом экране.
+      setSaveError(true);
+      setSubmitting(false);
+      return;
     }
     setSubmitting(false);
     onNext();
@@ -122,7 +126,7 @@ export default function ConsentScreen({ lang, onLangChange, onNext }: ConsentScr
         <span>
           {t.policyConsentBefore}
           <a
-            href={POLICY_PLACEHOLDER_URL}
+            href={legalDocumentUrl('terms')}
             target="_blank"
             rel="noopener noreferrer"
             className="consent-policy-link"
@@ -137,6 +141,15 @@ export default function ConsentScreen({ lang, onLangChange, onNext }: ConsentScr
           {t.policyConsentAfter}
         </span>
       </label>
+
+      {DOCUMENT_LINKS.map((key) => (
+        <a key={key} className="consent-policy-link" style={{ display: 'block', marginTop: 12 }}
+          href={legalDocumentUrl(key)} target="_blank" rel="noopener noreferrer">
+          {legalDocumentTitle(key)}
+        </a>
+      ))}
+
+      {saveError && <p role="alert" className="anketa-hint" style={{ marginTop: 16 }}>{t.error}</p>}
     </main>
   );
 }

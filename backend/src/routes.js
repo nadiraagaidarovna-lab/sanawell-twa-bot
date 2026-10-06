@@ -4,6 +4,12 @@ const db = require('./db');
 const { getAllProtocols } = require('./protocols');
 const { detectRiskTrigger, getSafetyResources } = require('./safety');
 const { buildWeeklyReport } = require('./weeklyReport');
+const consent = require('./consent');
+
+// Which onboarding an unfinished account gets. v2_all — the new flow for everyone;
+// v2_allowlist — the new flow for ONBOARDING_TESTER_IDS only; paused — no onboarding questions
+// at all (rollback without returning anyone to a different flow). Unset/unknown — v2_allowlist.
+const ONBOARDING_MODES = ['v2_all', 'v2_allowlist', 'paused'];
 
 // "Исправить" доступна в течение 24 часов после ПЕРВОЙ отправки чек-ина за день (ТЗ 6.3.4).
 // Т.к. чек-ин — одна запись в день, это на практике совпадает с "тот же Алматинский день"
@@ -37,6 +43,15 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   // Explicit, server-only focus-group allowlist. Empty/unset means nobody is opted in.
   const onboardingTesters = new Set((process.env.ONBOARDING_TESTER_IDS || '')
     .split(',').map(id => id.trim()).filter(id => /^[1-9]\d*$/.test(id)));
+  const onboardingMode = ONBOARDING_MODES.includes(process.env.ONBOARDING_VERSION_MODE)
+    ? process.env.ONBOARDING_VERSION_MODE : 'v2_allowlist';
+  const onboardingVersionFor = (telegramId) => {
+    if (onboardingMode === 'paused') return 'paused';
+    if (onboardingMode === 'v2_all' || onboardingTesters.has(String(telegramId))) return 'v2';
+    return 'legacy';
+  };
+  // Writes of personal and wellbeing data require a confirmed consent to the current documents.
+  const consentGate = consent.requireConsent(db);
 
   // Состояние пользователя при открытии Web App: выбран ли путь менопаузы, даны ли оба
   // обязательных согласия (раздел 13 ТЗ), пройден ли онбординг целиком. onboarded требует
@@ -49,6 +64,15 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     requireAuth,
     asyncHandler(async (req, res) => {
       const user = await db.getUser(req.telegramId);
+      // Missing journal table reads as "no current consent": the app then asks for it and the
+      // write itself is rejected by consentGate with 503, never silently accepted.
+      let consents;
+      try {
+        consents = await consent.getConsentStatus(db, req.telegramId);
+      } catch (error) {
+        if (error.code !== consent.UNDEFINED_TABLE) throw error;
+        consents = consent.statusFromEvents([]);
+      }
       const onboarded = !!(
         user &&
         user.menopause_path &&
@@ -58,6 +82,8 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
       res.json({
         onboarded,
         newOnboardingTester: onboardingTesters.has(String(req.telegramId)),
+        onboardingVersion: onboardingVersionFor(req.telegramId),
+        consents,
         language: user ? user.language : null,
         reminderOptIn: !!(user && user.reminder_opt_in),
         habitsReminderOptIn: !!(user && user.habits_reminder_opt_in),
@@ -99,6 +125,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/profile',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { displayName, age, email, phone } = req.body || {};
 
@@ -189,6 +216,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/menopause-path',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { path } = req.body || {};
       if (!db.MENOPAUSE_PATHS.includes(path)) {
@@ -207,6 +235,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/anketa/name',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { displayName } = req.body || {};
       if (displayName !== undefined && displayName !== null && typeof displayName !== 'string') {
@@ -221,6 +250,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/anketa/age-range',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { ageRange } = req.body || {};
       if (!db.AGE_RANGES.includes(ageRange)) {
@@ -237,6 +267,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/anketa/age',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { age } = req.body || {};
       if (!Number.isInteger(age) || age < 18 || age > 100) {
@@ -252,7 +283,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     ['/anketa/cycle-situation', 'cycleSituation', db.CYCLE_SITUATIONS, db.setCycleSituation],
     ['/anketa/mht-status', 'mhtStatus', db.MHT_STATUSES, db.setMhtStatus],
   ]) {
-    router.post(path, requireAuth, asyncHandler(async (req, res) => {
+    router.post(path, requireAuth, consentGate, asyncHandler(async (req, res) => {
       const value = req.body?.[field];
       if (!values.includes(value)) return res.status(400).json({ error: 'invalid_' + field });
       try {
@@ -271,6 +302,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/anketa/self-perceived-stage',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { stage } = req.body || {};
       if (!db.SELF_PERCEIVED_STAGES.includes(stage)) {
@@ -286,6 +318,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/anketa/goal',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { goal, goalKey } = req.body || {};
       if (goal !== undefined && goal !== null && typeof goal !== 'string') {
@@ -308,6 +341,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/anketa/lifestyle',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { activity, diet, stressLevel } = req.body || {};
       await db.setLifestyle(req.telegramId, { activity, diet, stressLevel });
@@ -319,6 +353,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/anketa/symptoms',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { checklist } = req.body || {};
       const isPlainObject = checklist !== null && typeof checklist === 'object' && !Array.isArray(checklist);
@@ -336,9 +371,41 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/anketa/complete',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       await db.setOnboardingAnketaCompleted(req.telegramId);
       res.json({ ok: true });
+    })
+  );
+
+  // Versioned confirmation of both onboarding documents at once. The client must send the
+  // version it showed; a stale version is rejected so a confirmation is never recorded
+  // against documents the user did not see. Already-current consent is not duplicated.
+  router.post(
+    '/consents',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const { version, documents, source = 'onboarding_v2' } = req.body || {};
+      const requested = Array.isArray(documents) ? [...new Set(documents)].sort() : null;
+      if (!requested || requested.join() !== [...consent.REQUIRED_DOCUMENTS].sort().join() ||
+          !consent.SOURCES.includes(source) || typeof version !== 'string') {
+        return res.status(400).json({ error: 'invalid_payload' });
+      }
+      if (version !== consent.CURRENT_VERSION) {
+        return res.status(409).json({ error: 'outdated_version', reason: 'outdated_version', version: consent.CURRENT_VERSION });
+      }
+      try {
+        const status = await consent.getConsentStatus(db, req.telegramId);
+        if (!status.current) {
+          await db.recordConsentGrants(req.telegramId, { documents: requested, version, source });
+        }
+        res.json({ ok: true, ...(await consent.getConsentStatus(db, req.telegramId)) });
+      } catch (error) {
+        if (error.code === consent.UNDEFINED_TABLE) {
+          return res.status(503).json({ error: 'consent_storage_unavailable', reason: 'consent_storage_unavailable' });
+        }
+        throw error;
+      }
     })
   );
 
@@ -411,6 +478,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/checkin',
     requireAuth,
+    consentGate,
     asyncHandler(async (req, res) => {
       const { sleep, mood, memory, comment, energy, hot_flashes } = req.body || {};
       const scores = { sleep, mood, memory };

@@ -45,9 +45,15 @@ test('fresh schema: explicit migration is nullable, default-free and repeatable'
 test('existing schema, authenticated narrow endpoints, validation, hydration and startup independence', async () => {
   const pg = new PGlite(); let server;
   try {
-    class TestPool { query(sql, params) { return params ? pg.query(sql, params) : pg.exec(sql).then(r => r[r.length - 1]); } }
+    class TestPool {
+      query(sql, params) { return params ? pg.query(sql, params) : pg.exec(sql).then(r => r[r.length - 1]); }
+      connect() { return Promise.resolve({ query: (sql, params) => this.query(sql, params), release() {} }); }
+    }
     const db = load('db.js', { pg: { Pool: TestPool } });
     await db.initSchema(); // Startup must succeed without the migration.
+    // Answers are written only with a confirmed consent (consent_events, separate migration).
+    await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations/20261006_consent_events.sql'), 'utf8'));
+    const { CURRENT_VERSION, REQUIRED_DOCUMENTS } = load('consent.js');
     await pg.query("INSERT INTO users (telegram_id,display_name,age,menopause_path,self_perceived_stage,medical_disclaimer_consent_at,data_storage_consent_at,onboarding_anketa_completed,onboarding_welcome_seen) VALUES ('101','Existing',49,'surgical','unsure','2020-01-01','2020-01-02',true,true)");
     const before = await db.getUser('101');
     const { buildRouter } = load('routes.js', { './db': db });
@@ -61,6 +67,9 @@ test('existing schema, authenticated narrow endpoints, validation, hydration and
       const response = await fetch(base + route, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(signed ? { 'X-Telegram-Init-Data': auth(id) } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
       return { status: response.status, body: await response.json() };
     }
+    // Legacy unversioned timestamps alone no longer allow writes.
+    assert.equal((await request('/anketa/mht-status', { mhtStatus: 'no' })).status, 403);
+    assert.equal((await request('/consents', { version: CURRENT_VERSION, documents: REQUIRED_DOCUMENTS })).status, 200);
     let me = await request('/me');
     assert.equal(me.status, 200); assert.equal(me.body.cycleSituation, null); assert.equal(me.body.mhtStatus, null);
     const gates = { onboarded: me.body.onboarded, onboardingAnketaCompleted: me.body.onboardingAnketaCompleted, onboardingWelcomeSeen: me.body.onboardingWelcomeSeen };
@@ -74,6 +83,7 @@ test('existing schema, authenticated narrow endpoints, validation, hydration and
     await pg.exec(migration);
     const after = await db.getUser('101');
     assert.equal(after.cycle_situation, null); assert.equal(after.mht_status, null);
+    // Existing timestamps are preserved, never overwritten by the versioned consent.
     for (const key of Object.keys(before)) assert.deepEqual(after[key], before[key], key);
     for (const [route, field, column, allowed] of [
       ['/anketa/cycle-situation', 'cycleSituation', 'cycle_situation', ['regular','changing','no_period_12m','post_surgery','treatment_affected','other','unsure']],
@@ -99,6 +109,9 @@ test('existing schema, authenticated narrow endpoints, validation, hydration and
     assert.deepEqual(await db.getUser('101'), saved);
     me = (await request('/me')).body;
     for (const [key, value] of Object.entries(gates)) assert.equal(me[key], value);
+    assert.equal((await request('/anketa/mht-status', { mhtStatus: 'prefer_not_to_say' }, 303)).status, 403);
+    assert.equal(await db.getUser('303'), null); // A rejected write creates nothing.
+    assert.equal((await request('/consents', { version: CURRENT_VERSION, documents: REQUIRED_DOCUMENTS }, 303)).status, 200);
     assert.equal((await request('/anketa/mht-status', { mhtStatus: 'prefer_not_to_say' }, 303)).status, 200);
     const fresh = (await request('/me', undefined, 303)).body;
     assert.equal(fresh.mhtStatus, 'prefer_not_to_say'); assert.equal(fresh.cycleSituation, null); assert.equal(fresh.onboarded, false);

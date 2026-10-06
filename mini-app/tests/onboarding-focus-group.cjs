@@ -6,8 +6,9 @@ const base = process.env.FOCUS_GROUP_TEST_BASE_URL || 'http://127.0.0.1:5175/che
 const production = process.env.FOCUS_GROUP_TEST_PRODUCTION === '1';
 const welcomePath = '/api/onboarding-welcome-seen';
 const completePath = '/api/anketa/complete';
+const legal = require('../src/lib/legal-documents.json');
 const recordFor = overrides => ({
-  newOnboardingTester: true, onboardingWelcomeSeen: false, onboardingAnketaCompleted: false,
+  onboardingVersion: 'v2', consents: { current: false }, onboardingWelcomeSeen: false, onboardingAnketaCompleted: false,
   medicalDisclaimerConsented: true, dataStorageConsented: true, onboarded: false,
   displayName: 'Надира', age: 49, cycleSituation: 'unsure', mhtStatus: 'prefer_not_to_say',
   language: 'ru', menopausePath: null, symptomChecklist: null, ...overrides,
@@ -44,16 +45,19 @@ async function normalRead(route, path, checkin = null) {
 (async () => {
   const browser = await chromium.launch({ headless: true, channel: 'msedge' });
   try {
-    for (const [name, overrides, query, selector] of [
-      ['outsider-with-link', { newOnboardingTester: false }, '?onboarding=focus-group', '.onboarding-welcome'],
-      ['old-incomplete', { newOnboardingTester: false, onboardingWelcomeSeen: true }, '?onboarding=focus-group', '#anketa-name'],
-      ['tester-without-opt-in', {}, '', '.onboarding-welcome'],
-      ['wrong-opt-in', {}, '?onboarding=other', '.onboarding-welcome'],
-      ['missing-server-flag', { newOnboardingTester: undefined }, '?onboarding=focus-group', '.onboarding-welcome'],
-      ['malformed-server-flag', { newOnboardingTester: 'true' }, '?onboarding=focus-group', '.onboarding-welcome'],
-      ['completed-tester', { onboardingWelcomeSeen: true, onboardingAnketaCompleted: true }, '?onboarding=focus-group', '.sw-greeting'],
-      ['completed-outsider', { newOnboardingTester: false, onboardingWelcomeSeen: true, onboardingAnketaCompleted: true }, '', '.sw-greeting'],
-      ['completed-missing-consent', { onboardingWelcomeSeen: true, onboardingAnketaCompleted: true, dataStorageConsented: false }, '?onboarding=focus-group', '.consent-policy-link'],
+    // The server decides the version; the regular bot button (no query, no start_param) is enough.
+    for (const [name, overrides, selector, newFlow] of [
+      ['v2-regular-button', {}, 'text=Добро пожаловать в SanaWell AI', true],
+      ['v2-ignores-old-opt-in-absence', { onboardingWelcomeSeen: true }, 'text=Добро пожаловать в SanaWell AI', true],
+      ['legacy-new', { onboardingVersion: 'legacy' }, '.onboarding-welcome', false],
+      ['legacy-incomplete', { onboardingVersion: 'legacy', onboardingWelcomeSeen: true, consents: { current: true } }, '#anketa-name', false],
+      ['legacy-incomplete-no-consent', { onboardingVersion: 'legacy', onboardingWelcomeSeen: true }, '.consent-policy-link >> nth=0', false],
+      ['missing-version-is-not-v2', { onboardingVersion: undefined }, '.onboarding-welcome', false],
+      ['paused', { onboardingVersion: 'paused' }, 'text=Знакомство временно недоступно', true],
+      ['completed', { onboardingWelcomeSeen: true, onboardingAnketaCompleted: true, consents: { current: true } }, '.sw-greeting', false],
+      ['completed-legacy-account', { onboardingVersion: 'legacy', onboardingWelcomeSeen: true, onboardingAnketaCompleted: true, consents: { current: true } }, '.sw-greeting', false],
+      ['completed-paused', { onboardingVersion: 'paused', onboardingWelcomeSeen: true, onboardingAnketaCompleted: true, consents: { current: true } }, '.sw-greeting', false],
+      ['completed-needs-reconsent', { onboardingWelcomeSeen: true, onboardingAnketaCompleted: true }, 'text=Ваши данные — под вашим контролем', true],
     ]) {
       const page = await telegramPage(browser); const record = recordFor(overrides); const errors = [];
       page.on('pageerror', e => errors.push(e.message));
@@ -62,14 +66,29 @@ async function normalRead(route, path, checkin = null) {
         const path = new URL(route.request().url()).pathname;
         return path === '/api/me' ? route.fulfill({ json: record }) : normalRead(route, path);
       });
-      await page.goto(base + query); await page.locator(selector).waitFor();
-      assert.equal(await page.locator('.sw-onboarding').count(), 0); assert.deepEqual(errors, []);
+      await page.goto(base); await page.locator(selector).waitFor();
+      assert.equal(await page.locator('.sw-onboarding').count() > 0, newFlow, name);
+      if (name === 'completed-needs-reconsent') assert.equal(await page.locator('.sw-onboarding-progress').count(), 0);
+      assert.deepEqual(errors, []);
       console.log(`PASS gate: ${name}`); await page.close();
     }
-    for (const scenario of ['success','first-fails','second-fails','lost-first','lost-second','status-fails','invalid-status','unconfirmed','duplicate','partial-existing','progress', ...(production ? ['telegram-start-param'] : [])]) {
-      const page = await telegramPage(browser, scenario === 'telegram-start-param' ? 'onboarding_focus_group' : undefined);
+    {
+      const page = await telegramPage(browser); let failing = true;
+      await page.route('**/api/**', route => {
+        const path = new URL(route.request().url()).pathname;
+        if (path === '/api/me') return failing ? route.fulfill({ status: 503, json: {} }) : route.fulfill({ json: recordFor({}) });
+        return normalRead(route, path);
+      });
+      await page.goto(base); await page.getByRole('heading', { name: 'Не удалось загрузить данные' }).waitFor();
+      assert.equal(await page.locator('.onboarding-welcome').count(), 0); // never a guessed flow
+      failing = false; await page.getByRole('button', { name: 'Повторить', exact: true }).click();
+      await page.getByText('Добро пожаловать в SanaWell AI').waitFor();
+      console.log('PASS gate: start failure shows retry, then the server-chosen flow'); await page.close();
+    }
+    for (const scenario of ['success','first-fails','second-fails','lost-first','lost-second','status-fails','invalid-status','unconfirmed','duplicate','partial-existing','progress']) {
+      const page = await telegramPage(browser);
       const record = recordFor({ onboardingWelcomeSeen: scenario === 'partial-existing' });
-      let finalStep = false, failed = false, checkin = null, release, started;
+      let finalStep = false, failed = false, checkin = null, release, started, consentWrites = 0;
       const writes = [], errors = [];
       const barrier = new Promise(resolve => { release = resolve; });
       const waiting = new Promise(resolve => { started = resolve; });
@@ -83,8 +102,13 @@ async function normalRead(route, path, checkin = null) {
           return route.fulfill({ json: record });
         }
         if (request.method() === 'GET') return normalRead(route, path, checkin);
+        if (path === '/api/consents') {
+          assert.deepEqual(request.postDataJSON(), { version: legal.version, documents: ['terms', 'privacy_data_consent'], source: 'onboarding_v2' });
+          record.consents = { current: true }; consentWrites++;
+          return route.fulfill({ json: { ok: true, current: true, version: legal.version } });
+        }
         if (path === '/api/checkin') {
-          assert(record.onboardingWelcomeSeen && record.onboardingAnketaCompleted);
+          assert(record.onboardingWelcomeSeen && record.onboardingAnketaCompleted && record.consents.current);
           const data = request.postDataJSON();
           checkin = { sleepScore: data.sleep, moodScore: data.mood, memoryScore: data.memory, energyScore: null, hot_flashes: null, comment: null, canCorrect: true };
           return route.fulfill({ json: { ok: true, checkin } });
@@ -103,7 +127,7 @@ async function normalRead(route, path, checkin = null) {
         record[path === welcomePath ? 'onboardingWelcomeSeen' : 'onboardingAnketaCompleted'] = true;
         return route.fulfill({ json: { ok: true } });
       });
-      await page.goto(base + (scenario === 'telegram-start-param' ? '' : '?onboarding=focus-group'));
+      await page.goto(base);
       assert.equal(await page.locator('aside').count(), 0); // No preview wrapper.
       await page.getByRole('button', { name: 'Начать мою историю 360°' }).click();
       await page.getByRole('checkbox').nth(0).check(); await page.getByRole('checkbox').nth(1).check();
@@ -128,6 +152,7 @@ async function normalRead(route, path, checkin = null) {
       await page.locator('.checkin-fields').waitFor();
       assert(record.onboardingWelcomeSeen && record.onboardingAnketaCompleted);
       assert.equal(record.menopausePath, null);
+      assert.equal(consentWrites, 1);
       assert.equal(writes.filter(p => p === welcomePath).length, scenario === 'partial-existing' ? 0 : scenario === 'first-fails' ? 2 : 1);
       assert.equal(writes.filter(p => p === completePath).length, ['second-fails','unconfirmed'].includes(scenario) ? 2 : 1);
       const savedWrites = writes.length;
@@ -145,7 +170,6 @@ async function normalRead(route, path, checkin = null) {
       } else { await back(page); await page.locator('.sw-greeting').waitFor(); }
       // Drain Back history: none of it may reopen completed onboarding.
       for (let i = 0; i < 4; i++) { await back(page); await page.waitForTimeout(30); assert.equal(await page.locator('.sw-onboarding').count(), 0); }
-      await page.goto(base + '?onboarding=focus-group'); await page.locator('.sw-greeting').waitFor();
       await page.goto(base); await page.locator('.sw-greeting').waitFor();
       assert.equal(writes.length, savedWrites); assert.deepEqual(errors, []);
       console.log(`PASS completion/navigation: ${scenario}`); await page.close();

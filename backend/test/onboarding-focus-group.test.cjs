@@ -22,7 +22,7 @@ test('focus-group eligibility is off by default, exact-match and authenticated; 
   try {
     for (const configuration of ['', '*', '101, 202, invalid, *, 0']) {
       process.env.ONBOARDING_TESTER_IDS = configuration;
-      const db = { getUser: async () => ({ onboarding_anketa_completed: true, onboarding_welcome_seen: true, medical_disclaimer_consent_at: 'existing', data_storage_consent_at: 'existing', menopause_path: null }) };
+      const db = { getLatestConsentEvents: async () => [], getUser: async () => ({ onboarding_anketa_completed: true, onboarding_welcome_seen: true, medical_disclaimer_consent_at: 'existing', data_storage_consent_at: 'existing', menopause_path: null }) };
       const module = { exports: {} };
       vm.runInThisContext('(function(require,module,exports){' + fs.readFileSync(filename, 'utf8') + '\n})', { filename })(
         name => name === './db' ? db : nativeRequire(name), module, module.exports);
@@ -38,6 +38,9 @@ test('focus-group eligibility is off by default, exact-match and authenticated; 
           assert.equal(response.status, 200);
           const me = await response.json();
           assert.equal(me.newOnboardingTester, configuration.startsWith('101,') && [101, 202].includes(id));
+          // Default mode (ONBOARDING_VERSION_MODE unset) is v2_allowlist.
+          assert.equal(me.onboardingVersion, me.newOnboardingTester ? 'v2' : 'legacy');
+          assert.equal(me.consents.current, false);
           assert.equal(me.onboardingAnketaCompleted, true);
           assert.equal(me.onboardingWelcomeSeen, true);
           assert.equal(me.medicalDisclaimerConsented, true);

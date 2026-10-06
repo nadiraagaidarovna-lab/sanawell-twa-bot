@@ -1,21 +1,38 @@
 # Controlled onboarding focus group
 
-This does not enable the new onboarding for all unfinished accounts.
+## Which onboarding an account gets
 
-## Opt-in (configuration is not applied by this change)
+The server decides it in `GET /api/me` (`onboardingVersion`), so the regular bot button
+«Открыть/Ашу» is enough — no special link or `start_param`.
 
-1. Set the backend environment variable `ONBOARDING_TESTER_IDS` to a comma-separated list of explicitly approved numeric Telegram user IDs. Do not put IDs in Vite variables, source code or shared links. Unset/empty allows nobody. Backend restart is needed when changing this server configuration.
-2. An allowlisted tester opens the existing authenticated Mini App with `?onboarding=focus-group` appended to its `/checkin/` URL, or with Telegram Mini App `startapp=onboarding_focus_group` (received in signed initData as `start_param`). Use the actual existing app/bot link; no new bot is created.
-3. Both the allowlist and launch opt-in are required. `onboardingAnketaCompleted === true` always preserves the existing path, including the existing consent gate. Unfinished accounts outside the group retain legacy onboarding.
+`ONBOARDING_VERSION_MODE` (backend environment, restart required):
 
-## Completion and return visits
+| Value | Unfinished accounts |
+| --- | --- |
+| `v2_all` | new six-step onboarding for everyone |
+| `v2_allowlist` (default, also for unset/unknown values) | new onboarding for numeric Telegram IDs in `ONBOARDING_TESTER_IDS`; others keep the legacy flow |
+| `paused` | a neutral «временно недоступно» page; no questions, no writes |
 
-The last step reads `/api/me`, saves missing `onboardingWelcomeSeen` first via `/api/onboarding-welcome-seen`, then `onboardingAnketaCompleted` via `/api/anketa/complete`. Both must succeed before leaving. Failures stay on the final step; retry reads the flags again, preserving partial success and lost-response writes.
+Completed accounts (`onboardingAnketaCompleted === true`) always open Home. If they have no
+consent to the current document version, they first see only the consent page; answers and the
+completion flag are not touched. Nothing is reset automatically.
 
-The app removes onboarding from navigation history, opens normal Check-in, and uses the normal Map/Home/Progress handlers. Completed testers return through the existing app gate even if the opt-in remains in their link. To resume an unfinished new flow, use the same opt-in link while still allowlisted; saved answers hydrate, but step position itself is not stored.
+If `/api/me` fails, the app shows a retry page instead of guessing a flow.
 
-No `onboarded` routing or `menopause_path` writes are introduced. Disabling the allowlist restores legacy routing for unfinished users without changing saved data.
+## Consent
 
-## Before a later rollout
+Both checkboxes are confirmed with one `POST /api/consents` carrying the document version
+from `mini-app/src/lib/legal-documents.json` (the single source of document addresses, also
+read by `backend/src/consent.js`). The server records one append-only row per document in
+`consent_events` and rejects a stale version (409). Legacy `*_consent_at` timestamps are kept
+and filled only when empty; on their own they no longer count as consent.
 
-The previously implemented Cycle/MHT endpoints and explicit migration must be available. This task does not run that migration, configure Render, or deploy. The existing `OnboardingFlow.css` is still an untracked preview dependency and must be included in any eventual rollout; it is not changed here. Legal documents retain their MVP draft status.
+Every write of personal or wellbeing data (`/profile`, `/menopause-path`, `/anketa/*`,
+`POST /checkin`) requires a current consent: 403 `consent_required` otherwise, 503 if the
+journal table is missing (fails closed). Language, reminder opt-out and account deletion
+requests stay available.
+
+## Before enabling anywhere
+
+Apply `backend/migrations/20261006_consent_events.sql` (and `20260923_onboarding_cycle_mht.sql`)
+to the target database before deploying this code. Legal documents retain their MVP draft status.

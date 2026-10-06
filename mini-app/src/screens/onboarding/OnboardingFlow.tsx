@@ -4,6 +4,8 @@ import { getTelegramFirstName } from '../../lib/telegram';
 import { useBackButton } from '../../lib/useBackButton';
 import { useMainButton } from '../../lib/useMainButton';
 import { apiFetch } from '../../lib/api';
+import { legalDocumentTitle, legalDocumentUrl } from '../../lib/legalDocuments';
+import { saveConsents } from '../../lib/onboardingFocusGroup';
 import './OnboardingFlow.css';
 
 // Self-descriptions only. Never translate these keys into a medical stage or path.
@@ -49,9 +51,31 @@ function Options({ name, options, value, onChange, disabled }: {
   </fieldset>;
 }
 
-/** Authenticated per-step persistence; production routing remains separate. */
-export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void | Promise<void> }) {
-  const [step, setStep] = useState(0);
+/** Full-page message in the onboarding style (paused onboarding, failed start). */
+export function OnboardingNotice({ title, text, actionLabel, onAction }: {
+  title: string; text: string; actionLabel?: string; onAction?: () => void;
+}) {
+  return <main className="sw-onboarding" lang="ru">
+    <section className="sw-onboarding-content">
+      <img className="sw-onboarding-logo" src={logo} alt="SanaWell AI" />
+      <h1>{title}</h1>
+      <p>{text}</p>
+    </section>
+    {actionLabel && onAction && <footer className="sw-onboarding-footer">
+      <button type="button" className="sw-onboarding-primary" onClick={onAction}>{actionLabel}</button>
+    </footer>}
+  </main>;
+}
+
+/**
+ * Authenticated per-step persistence. consentOnly shows just the consent page (re-consent of a
+ * completed account to the current documents) and calls onCheckin once it is confirmed.
+ */
+export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
+  onCheckin: () => void | Promise<void>;
+  consentOnly?: boolean;
+}) {
+  const [step, setStep] = useState(consentOnly ? 1 : 0);
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
   const [name, setName] = useState(() => getTelegramFirstName() ?? '');
@@ -127,26 +151,11 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void | 
       setSavingConsent(true);
       setConsentError('');
       try {
-        // Read on every attempt: preserve existing timestamps and recover partial
-        // saves, including a successful write whose response was lost in transit.
-        const me = await apiFetch<{ medicalDisclaimerConsented: boolean; dataStorageConsented: boolean }>('/me');
-        if (typeof me.medicalDisclaimerConsented !== 'boolean' || typeof me.dataStorageConsented !== 'boolean') {
-          throw new Error('Consent status unavailable');
-        }
-        // Legacy UI already maps terms acceptance to this legacy-named endpoint.
-        // No renaming or reinterpretation of historical records.
-        for (const [stored, path] of [
-          [me.medicalDisclaimerConsented, '/consent/medical-disclaimer'],
-          [me.dataStorageConsented, '/consent/data-storage'],
-        ] as const) {
-          if (!stored) {
-            const result = await apiFetch<{ ok: boolean }>(path, {
-              method: 'POST', body: JSON.stringify({ consented: true }),
-            });
-            if (result.ok !== true) throw new Error('Consent save not confirmed');
-          }
-        }
-        setStep(2);
+        // Versioned, server-confirmed record (consent_events). The server does not duplicate
+        // an already-current consent, so a retry after a lost response is safe.
+        await saveConsents(consentOnly ? 'reconsent' : 'onboarding_v2');
+        if (consentOnly) await onCheckin();
+        else setStep(2);
       } catch {
         setConsentError('Не удалось подтвердить сохранение согласий. Попробуйте ещё раз.');
       } finally {
@@ -230,7 +239,7 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void | 
   };
   const cta = step === 0 ? 'Начать мою историю 360°' : step === 5 ? 'Отметить самочувствие →' : 'Продолжить';
 
-  useBackButton(step > 0 ? () => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current && !completionInFlight.current) back(); } : null);
+  useBackButton(step > 0 && !consentOnly ? () => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current && !completionInFlight.current) back(); } : null);
   useMainButton({ text: cta, onClick: next, isVisible: false });
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
@@ -238,13 +247,13 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void | 
   }, [step]);
 
   return <main className="sw-onboarding" lang="ru">
-    <header className="sw-onboarding-header">
+    {!consentOnly && <><header className="sw-onboarding-header">
       {step > 0 ? <button type="button" className="sw-onboarding-back" disabled={savingConsent || savingProfile || savingAnswer || finishing} onClick={() => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current && !completionInFlight.current) back(); }}>← Назад</button> : <span />}
       <span aria-label={`Шаг ${step + 1} из 6`}>{step + 1}/6</span>
     </header>
     <div className="sw-onboarding-progress" aria-hidden="true">
       {TITLES.map((title, index) => <span key={title} data-complete={index <= step} />)}
-    </div>
+    </div></>}
     <section className="sw-onboarding-content">
       {step === 0 && <img className="sw-onboarding-logo" src={logo} alt="SanaWell AI" />}
       <h1 id="onboarding-title" tabIndex={-1} ref={heading}>{TITLES[step]}</h1>
@@ -257,14 +266,14 @@ export default function OnboardingFlow({ onCheckin }: { onCheckin: () => void | 
         <div className="sw-onboarding-option sw-onboarding-consent">
           <input id="onboarding-terms" type="checkbox" checked={terms} disabled={savingConsent} onChange={(event) => { if (!consentInFlight.current) setTerms(event.target.checked); }} />
           <div><label htmlFor="onboarding-terms">Я принимаю Условия использования.</label>
-            <a className="sw-onboarding-link" href={`${import.meta.env.BASE_URL}legal/mvp-draft-2026-09-23/terms.html`} target="_blank" rel="noopener noreferrer">Условия использования</a>
+            <a className="sw-onboarding-link" href={legalDocumentUrl('terms')} target="_blank" rel="noopener noreferrer">{legalDocumentTitle('terms')}</a>
           </div>
         </div>
         <div className="sw-onboarding-option sw-onboarding-consent">
           <input id="onboarding-privacy" type="checkbox" checked={privacy} disabled={savingConsent} onChange={(event) => { if (!consentInFlight.current) setPrivacy(event.target.checked); }} />
           <div><label htmlFor="onboarding-privacy">Я ознакомилась с Политикой конфиденциальности и даю согласие на сбор и обработку персональных данных.</label>
-            <a className="sw-onboarding-link" href={`${import.meta.env.BASE_URL}legal/mvp-draft-2026-09-23/privacy.html`} target="_blank" rel="noopener noreferrer">Политика конфиденциальности</a>
-            <a className="sw-onboarding-link" href={`${import.meta.env.BASE_URL}legal/mvp-draft-2026-09-23/data-consent.html`} target="_blank" rel="noopener noreferrer">Согласие на сбор и обработку персональных данных</a>
+            <a className="sw-onboarding-link" href={legalDocumentUrl('privacy')} target="_blank" rel="noopener noreferrer">{legalDocumentTitle('privacy')}</a>
+            <a className="sw-onboarding-link" href={legalDocumentUrl('dataConsent')} target="_blank" rel="noopener noreferrer">{legalDocumentTitle('dataConsent')}</a>
           </div>
         </div>
         <p className="sw-onboarding-note">Документы — рабочие проекты для закрытой MVP-фокус-группы. Перед публичным запуском требуется финальная юридическая проверка.</p>

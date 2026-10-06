@@ -17,8 +17,8 @@ import { NavigationProvider } from './lib/navigation';
 import { useNavigation } from './lib/useNavigation';
 import { useBackButton } from './lib/useBackButton';
 import { apiFetch } from './lib/api';
-import { completeFocusGroupOnboarding, requestedFocusGroupOnboarding } from './lib/onboardingFocusGroup';
-import OnboardingFlow from './screens/onboarding/OnboardingFlow';
+import { completeFocusGroupOnboarding } from './lib/onboardingFocusGroup';
+import OnboardingFlow, { OnboardingNotice } from './screens/onboarding/OnboardingFlow';
 import { getTelegramLanguageCode } from './lib/telegram';
 import WelcomeScreen from './screens/WelcomeScreen';
 import ConsentScreen from './screens/ConsentScreen';
@@ -45,17 +45,17 @@ import type { ScreenId } from './lib/navigationContext';
 import type { Lang } from './content/anketa';
 
 interface MeGateResponse {
-  newOnboardingTester?: boolean;
+  onboardingVersion?: 'v2' | 'legacy' | 'paused';
+  consents?: { current?: boolean };
   onboardingWelcomeSeen: boolean;
   onboardingAnketaCompleted: boolean;
-  dataStorageConsented: boolean;
-  medicalDisclaimerConsented: boolean;
   language: string | null;
 }
 
-// Экран согласий обязателен (ТЗ раздел 13) — показываем, пока не даны ОБА согласия.
+// Consent to the CURRENT document version, confirmed by the server (consent_events). Old
+// unversioned timestamps no longer count: such accounts are asked again, answers untouched.
 function needsConsent(me: MeGateResponse): boolean {
-  return !me.dataStorageConsented || !me.medicalDisclaimerConsented;
+  return me.consents?.current !== true;
 }
 
 // Куда вести после согласий (или сразу, если согласия уже даны и экран пропущен) — та же
@@ -191,6 +191,13 @@ function Screens({
         reset('home');
         push('checkin');
       }} />;
+    case 'reconsent':
+      // Completed account without consent to the current documents: only the consent page,
+      // then Home. Onboarding answers and the completion flag are not touched.
+      return <OnboardingFlow consentOnly onCheckin={() => reset('home')} />;
+    case 'onboarding-paused':
+      return <OnboardingNotice title="Знакомство временно недоступно"
+        text="Мы скоро вернёмся. Попробуйте открыть SanaWell AI немного позже." />;
     case 'consent':
       return (
         <ConsentScreen lang={anketaLang} onLangChange={setAnketaLang} onNext={() => push(consentNextScreen)} />
@@ -223,8 +230,19 @@ function Screens({
   }
 }
 
+// Start screen from one GET /api/me. The server decides the onboarding version
+// (ONBOARDING_VERSION_MODE), so the regular bot button needs no special link.
+function initialScreenFor(me: MeGateResponse): ScreenId {
+  if (me.onboardingAnketaCompleted) return needsConsent(me) ? 'reconsent' : 'home';
+  if (me.onboardingVersion === 'v2') return 'onboarding-focus-group';
+  if (me.onboardingVersion === 'paused') return 'onboarding-paused';
+  if (!me.onboardingWelcomeSeen) return 'welcome';
+  return needsConsent(me) ? 'consent' : afterConsentScreen(me);
+}
+
 type GateState =
   | { status: 'loading' }
+  | { status: 'error' }
   | {
       status: 'ready';
       initialScreen: ScreenId;
@@ -235,6 +253,7 @@ type GateState =
 
 function App() {
   const [gate, setGate] = useState<GateState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,42 +264,34 @@ function App() {
 
         const consentNextScreen: ScreenId = afterConsentScreen(me);
         const welcomeNextScreen: ScreenId = needsConsent(me) ? 'consent' : consentNextScreen;
-        const testerOptIn = me.newOnboardingTester === true &&
-          me.onboardingAnketaCompleted === false && requestedFocusGroupOnboarding();
-        const initialScreen: ScreenId = testerOptIn ? 'onboarding-focus-group' :
-          !me.onboardingWelcomeSeen ? 'welcome' : welcomeNextScreen;
 
         setGate({
           status: 'ready',
-          initialScreen,
+          initialScreen: initialScreenFor(me),
           savedLanguage: me.language,
           welcomeNextScreen,
           consentNextScreen,
         });
       })
       .catch(() => {
-        // Не можем подтвердить initData/достучаться до сервера — безопаснее показать Шаг 0
-        // ещё раз, чем молча пропустить его (и согласия/анкету за ним) для новой
-        // пользовательницы. По той же логике, раз состояние согласий неизвестно —
-        // welcomeNextScreen ведёт на 'consent', а не сразу на анкету.
-        if (!cancelled) {
-          setGate({
-            status: 'ready',
-            initialScreen: 'welcome',
-            savedLanguage: null,
-            welcomeNextScreen: 'consent',
-            consentNextScreen: 'anketa-name',
-          });
-        }
+        // Without a confirmed account state we show a retry screen instead of guessing a flow:
+        // a guess could skip consent or put a woman into a different onboarding.
+        if (!cancelled) setGate({ status: 'error' });
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   if (gate.status === 'loading') {
     return <main className="screen" />;
+  }
+
+  if (gate.status === 'error') {
+    return <OnboardingNotice title="Не удалось загрузить данные"
+      text="Проверьте интернет и попробуйте ещё раз. Если не поможет — закройте и снова откройте приложение из бота."
+      actionLabel="Повторить" onAction={() => { setGate({ status: 'loading' }); setAttempt((n) => n + 1); }} />;
   }
 
   return (

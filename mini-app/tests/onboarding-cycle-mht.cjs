@@ -9,18 +9,19 @@ const mhtKeys = ['current','no','considering','previous','prefer_not_to_say'];
   try {
     for (const scenario of ['new','existing','cycle-fails','mht-fails','lost-response','restore-after-lost-response','unconfirmed','load-fails','invalid-load','duplicate-cycle','duplicate-mht','reopen']) {
       const page = await browser.newPage(); const writes = [], errors = [];
-      let reads = 0, failed = false, release, started;
+      let reads = 0, consented = false, failed = false, release, started;
       const barrier = new Promise(r => { release = r; }), waiting = new Promise(r => { started = r; });
-      const record = { medicalDisclaimerConsented: true, dataStorageConsented: true, displayName: 'Надира', age: 49, cycleSituation: scenario === 'existing' ? 'post_surgery' : null, mhtStatus: scenario === 'existing' ? 'previous' : null };
+      const record = { onboardingVersion:'v2',onboardingAnketaCompleted:false,onboardingWelcomeSeen:false,medicalDisclaimerConsented: true, dataStorageConsented: true, displayName: 'Надира', age: 49, cycleSituation: scenario === 'existing' ? 'post_surgery' : null, mhtStatus: scenario === 'existing' ? 'previous' : null };
       if (scenario === 'restore-after-lost-response') record.mhtStatus = 'no';
       page.on('pageerror', error => errors.push(error.message));
       await page.route('**/api/**', async route => {
         const path = new URL(route.request().url()).pathname;
         assert('x-telegram-init-data' in route.request().headers());
+        if(path==='/api/consents'){consented=true;return route.fulfill({json:{ok:true,current:true,version:require('../src/lib/legal-documents.json').version}});} // consent step no longer reads /me
         if (path === '/api/me') {
-          reads++;
-          if (reads === 3 && scenario === 'load-fails') return route.fulfill({ status: 503, json: {} });
-          if (reads === 3 && scenario === 'invalid-load') return route.fulfill({ json: { ...record, cycleSituation: 'absent_12_months' } });
+          if (consented) reads++;
+          if (reads === 2 && scenario === 'load-fails') return route.fulfill({ status: 503, json: {} });
+          if (reads === 2 && scenario === 'invalid-load') return route.fulfill({ json: { ...record, cycleSituation: 'absent_12_months' } });
           return route.fulfill({ json: record });
         }
         assert(['/api/anketa/cycle-situation','/api/anketa/mht-status'].includes(path), path);
@@ -37,7 +38,7 @@ const mhtKeys = ['current','no','considering','previous','prefer_not_to_say'];
       });
       const next = page.getByRole('button', { name: 'Продолжить', exact: true });
       async function openCycle() {
-        await page.goto(`${base}?onboarding-preview`);
+        await page.goto(`${base}`);
         await page.getByRole('button', { name: 'Начать мою историю 360°' }).click();
         await page.getByRole('checkbox').nth(0).check(); await page.getByRole('checkbox').nth(1).check(); await next.click();
         await page.waitForFunction(() => !document.querySelector('#onboarding-name')?.disabled);

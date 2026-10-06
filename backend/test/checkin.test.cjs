@@ -31,7 +31,9 @@ test('additive migration and backward-compatible check-in API', async () => {
     query(sql, params) {
       return params ? pg.query(sql, params) : pg.exec(sql).then(results => results[results.length - 1]);
     }
+    connect() { return Promise.resolve({ query: (sql, params) => this.query(sql, params), release() {} }); }
   }
+  const consentMigration = fs.readFileSync(path.resolve(__dirname, '../migrations/20261006_consent_events.sql'), 'utf8');
   const db = load('db.js', { pg: { Pool: TestPool } });
   let server;
   try {
@@ -55,6 +57,12 @@ test('additive migration and backward-compatible check-in API', async () => {
       return { status: res.status, body: await res.json() };
     }
     const old = { sleep: 7, mood: 6, memory: 8 };
+    // Saving a check-in requires a confirmed consent to the current documents.
+    assert.equal((await request('/checkin', old)).status, 503); // journal table not migrated yet
+    await pg.exec(consentMigration);
+    assert.equal((await request('/checkin', old)).status, 403);
+    const { CURRENT_VERSION, REQUIRED_DOCUMENTS } = load('consent.js', {});
+    assert.equal((await request('/consents', { version: CURRENT_VERSION, documents: REQUIRED_DOCUMENTS })).status, 200);
     let result = await request('/checkin', old);
     assert.equal(result.status, 200);
     assert.equal(result.body.checkin.energyScore, null);
