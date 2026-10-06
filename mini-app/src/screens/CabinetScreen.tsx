@@ -14,9 +14,12 @@ import BottomNav from '../components/BottomNav';
 import { legalDocumentTitle, legalDocumentUrl, type LegalDocumentKey } from '../lib/legalDocuments';
 import { withdrawConsents } from '../lib/onboardingFocusGroup';
 import { track } from '../lib/analytics';
+import { PRIORITY_UNSURE, TEXT as ONBOARDING_TEXT, topicTitle } from '../content/onboardingV2';
 
 interface MeResponse {
   consents?: { current?: boolean };
+  focusTopics?: string[];
+  focusPriority?: string | null;
   onboarded: boolean;
   language: string | null;
   reminderOptIn: boolean;
@@ -300,6 +303,24 @@ export default function CabinetScreen() {
                 {legalDocumentTitle(key)}
               </a>
             ))}
+
+            {/* Topics and main priority from onboarding; editable here. */}
+            <p className="cabinet-heading" style={{ marginTop: 16 }}>
+              Мои темы
+            </p>
+            {me && (me.focusTopics ?? []).length > 0 ? (
+              <>
+                <p className="cabinet-note">{(me.focusTopics ?? []).map(topicTitle).join(', ')}</p>
+                <p className="cabinet-note">
+                  {ONBOARDING_TEXT.reviewPriority}: {me.focusPriority === PRIORITY_UNSURE || !me.focusPriority ? ONBOARDING_TEXT.priorityUnsure : topicTitle(me.focusPriority)}
+                </p>
+              </>
+            ) : (
+              <p className="cabinet-note">Темы пока не выбраны.</p>
+            )}
+            <button type="button" className="cabinet-btn" disabled={withdrawStep === 'withdrawn'} onClick={() => push('topics-edit')}>
+              Изменить темы
+            </button>
 
             {/* Consent withdrawal. Documents above and the deletion request below stay available. */}
             <p className="cabinet-heading" style={{ marginTop: 16 }}>

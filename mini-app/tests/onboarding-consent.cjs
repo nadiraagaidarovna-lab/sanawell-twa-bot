@@ -32,7 +32,13 @@ const EXPECTED = { version: legal.version, documents: ['terms', 'privacy_data_co
         return route.fulfill({ json: { ok: true, current: true, version: legal.version } });
       });
       await page.goto(`${base}`);
-      await page.getByRole('button', { name: 'Начать мою историю 360°', exact: true }).click();
+      if (scenario === 'already-current') {
+        // Consent already confirmed: resume at the first unanswered step, no consent page, no write.
+        await page.getByRole('heading', { name: 'Как к вам обращаться?', exact: true }).waitFor();
+        assert.equal(writes.length, 0); assert.equal(errors.length, 0, errors.join(String.fromCharCode(10)));
+        console.log('PASS already-current: resumes after consent, 0 writes'); await page.close(); continue;
+      }
+      await page.getByRole('button', { name: 'Начать знакомство', exact: true }).click();
       const next = page.getByRole('button', { name: 'Продолжить', exact: true });
       const boxes = page.getByRole('checkbox');
       assert(await next.isDisabled());
@@ -48,7 +54,7 @@ const EXPECTED = { version: legal.version, documents: ['terms', 'privacy_data_co
         assert.equal(writes.length, 1);
         await next.click();
       }
-      await page.getByRole('heading', { name: 'Немного о вас', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Как к вам обращаться?', exact: true }).waitFor();
       assert(current);
       assert.equal(writes.length, ['fails', 'lost-response', 'unconfirmed-save', 'stale-version'].includes(scenario) ? 2 : 1);
       assert.equal(errors.length, 0, errors.join('\n'));
@@ -69,7 +75,7 @@ const EXPECTED = { version: legal.version, documents: ['terms', 'privacy_data_co
         return route.fulfill({ json: { ok: true, current: true, version: legal.version } });
       });
       await page.goto(`${base}`);
-      await page.getByRole('button', { name: 'Начать мою историю 360°' }).click();
+      await page.getByRole('button', { name: 'Начать знакомство' }).click();
       await page.getByRole('checkbox').nth(0).check(); await page.getByRole('checkbox').nth(1).check();
       await page.getByRole('button', { name: 'Продолжить', exact: true }).evaluate(button => { button.click(); button.click(); button.click(); });
       await waiting;
@@ -77,7 +83,7 @@ const EXPECTED = { version: legal.version, documents: ['terms', 'privacy_data_co
       assert(await page.getByRole('checkbox').nth(0).isDisabled()); assert(await page.getByRole('checkbox').nth(1).isDisabled());
       assert(await page.getByRole('button', { name: '← Назад', exact: true }).isDisabled());
       release();
-      await page.getByRole('heading', { name: 'Немного о вас', exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'Как к вам обращаться?', exact: true }).waitFor();
       assert.deepEqual(writes, ['/api/consents']);
       console.log('PASS repeated clicks: one consent write; checkboxes and back locked');
       await page.close();
@@ -87,7 +93,7 @@ const EXPECTED = { version: legal.version, documents: ['terms', 'privacy_data_co
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
       await page.route('**/api/**', route => { if (new URL(route.request().url()).pathname === '/api/events') { (globalThis.analyticsBatches ||= []).push(route.request().postDataJSON()); return route.fulfill({ json: { ok: true } }); }  if (new URL(route.request().url()).pathname === '/api/me') return route.fulfill({ json: { onboardingVersion: 'v2', onboardingAnketaCompleted: false, onboardingWelcomeSeen: false } }); throw new Error(`Unexpected API request while reading documents: ${route.request().url()}`); });
       await page.goto(`${base}`);
-      await page.getByRole('button', { name: 'Начать мою историю 360°' }).click();
+      await page.getByRole('button', { name: 'Начать знакомство' }).click();
       for (const [key, title] of Object.entries(legal.documents).map(([k, d]) => [k, d.title])) {
         const link = page.getByRole('link', { name: title, exact: true });
         assert.equal(new URL(await link.getAttribute('href'), page.url()).pathname, `/checkin/${legal.documents[key].path}`);

@@ -351,6 +351,38 @@ async function setMhtStatus(telegramId, value) {
   );
 }
 
+// New onboarding (migration 20261008_onboarding_topics.sql): topics multi-select and one main
+// priority among them or 'unsure'. Changing topics clears a priority that is no longer among
+// them, so the priority can never point to an unchosen topic.
+const FOCUS_TOPICS = ['nutrition', 'movement', 'sleep', 'menopause360', 'emotions', 'environment'];
+const PRIORITY_UNSURE = 'unsure';
+
+async function setFocusTopics(telegramId, topics) {
+  const unique = [...new Set(topics)];
+  if (unique.length < 1 || !unique.every((topic) => FOCUS_TOPICS.includes(topic))) {
+    throw new Error('invalid_focus_topics');
+  }
+  const ordered = FOCUS_TOPICS.filter((topic) => unique.includes(topic));
+  await pool.query(
+    `UPDATE users SET focus_topics = $1::text[],
+       focus_priority = CASE WHEN focus_priority = 'unsure' OR focus_priority = ANY($1::text[])
+                             THEN focus_priority ELSE NULL END
+     WHERE telegram_id = $2`,
+    [ordered, String(telegramId)]
+  );
+}
+
+// Returns false when the priority is not among the saved topics (nothing is written then).
+async function setFocusPriority(telegramId, priority) {
+  if (priority !== PRIORITY_UNSURE && !FOCUS_TOPICS.includes(priority)) throw new Error('invalid_focus_priority');
+  const { rowCount } = await pool.query(
+    `UPDATE users SET focus_priority = $1
+     WHERE telegram_id = $2 AND ($1 = 'unsure' OR $1 = ANY(focus_topics))`,
+    [priority, String(telegramId)]
+  );
+  return rowCount === 1;
+}
+
 // Свободный текст, не enum: один из вариантов шага 5 ("Своё") — открытое поле, см. коммент
 // у схемы в initSchema().
 // Известные ключи предустановленных вариантов цели (STEP5_GOAL в mini-app/src/content/anketa.ts,
@@ -719,6 +751,10 @@ async function logPartnerClick(partnerId, telegramId) {
 module.exports = {
   CYCLE_SITUATIONS,
   MHT_STATUSES,
+  FOCUS_TOPICS,
+  PRIORITY_UNSURE,
+  setFocusTopics,
+  setFocusPriority,
   setCycleSituation,
   setMhtStatus,
   initSchema,

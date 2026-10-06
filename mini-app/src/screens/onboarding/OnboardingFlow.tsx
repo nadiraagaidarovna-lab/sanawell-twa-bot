@@ -7,49 +7,19 @@ import { apiFetch } from '../../lib/api';
 import { legalDocumentTitle, legalDocumentUrl } from '../../lib/legalDocuments';
 import { saveConsents } from '../../lib/onboardingFocusGroup';
 import { errorKindOf, track } from '../../lib/analytics';
+import { PRIORITY_UNSURE, TEXT, TITLES, TOPICS, WELCOME, topicTitle } from '../../content/onboardingV2';
 import './OnboardingFlow.css';
 
-// Self-descriptions only. Never translate these keys into a medical stage or path.
-const CYCLE_OPTIONS = [
-  ['regular', 'Мой цикл пока регулярный', 'Но я уже замечаю изменения в самочувствии.'],
-  ['changing', 'Мой цикл стал меняться', 'Менструации приходят иначе, чем раньше.'],
-  ['no_period_12m', 'Менструаций нет уже 12 месяцев или дольше', ''],
-  ['post_surgery', 'Менструаций нет после операции', ''],
-  ['treatment_affected', 'На цикл повлияло лечение или препараты', ''],
-  ['other', 'У меня другая ситуация', ''],
-  ['unsure', 'Я не знаю / не уверена', ''],
-] as const;
+// Seven screens: 0 welcome, 1 consent, 2 name, 3 topics, 4 main priority, 5 review, 6 start map.
+// Self-reported choices only: no scoring, no stage, no medical conclusion anywhere.
+const STEP = { welcome: 0, consent: 1, name: 2, topics: 3, priority: 4, review: 5, map: 6 } as const;
+const TOTAL = TITLES.length;
 
-const HRT_OPTIONS = [
-  ['current', 'Да, принимаю сейчас', ''],
-  ['no', 'Нет', ''],
-  ['considering', 'Обсуждаю с врачом / планирую', ''],
-  ['previous', 'Принимала раньше', ''],
-  ['prefer_not_to_say', 'Не хочу отвечать', ''],
-] as const;
-
-const TITLES = [
-  'Добро пожаловать в SanaWell AI',
-  'Ваши данные — под вашим контролем',
-  'Немного о вас',
-  'Расскажите немного о вашем цикле',
-  'Принимаете ли вы сейчас МГТ/ГЗТ?',
-  'Начнём вашу историю 360°',
-];
-
-function Options({ name, options, value, onChange, disabled }: {
-  name: string;
-  options: readonly (readonly [string, string, string])[];
-  value: string;
-  onChange: (value: string) => void;
-  disabled: boolean;
-}) {
-  return <fieldset className="sw-onboarding-options" aria-labelledby="onboarding-title" disabled={disabled}>
-    {options.map(([key, label, hint]) => <label className="sw-onboarding-option" key={key}>
-      <input type="radio" name={name} value={key} checked={value === key} onChange={() => onChange(key)} />
-      <span>{label}{hint && <span className="sw-onboarding-option-hint">{hint}</span>}</span>
-    </label>)}
-  </fieldset>;
+interface MeOnboarding {
+  consents?: { current?: boolean };
+  displayName: string | null;
+  focusTopics?: string[];
+  focusPriority?: string | null;
 }
 
 /** Full-page message in the onboarding style (paused onboarding, failed start). */
@@ -74,7 +44,7 @@ export function OnboardingWelcomeAgain({ onClose }: { onClose: () => void }) {
   return <main className="sw-onboarding" lang="ru">
     <section className="sw-onboarding-content">
       <img className="sw-onboarding-logo" src={logo} alt="SanaWell AI" />
-      <h1>{TITLES[0]}</h1>
+      <h1>{WELCOME.title}</h1>
       <WelcomeText />
     </section>
     <footer className="sw-onboarding-footer">
@@ -85,22 +55,174 @@ export function OnboardingWelcomeAgain({ onClose }: { onClose: () => void }) {
 
 function WelcomeText() {
   return <>
-    <p>Ваше пространство для понимания самочувствия в пери- и менопаузе.<br />Отмечайте изменения, собирайте свою историю и наблюдайте личную динамику.</p>
-    <p className="sw-onboarding-note">SanaWell AI — wellness-сервис. Не ставит диагнозы и не заменяет врача.</p>
+    <ul className="sw-onboarding-benefits">
+      {WELCOME.benefits.map((benefit) => <li key={benefit}>{benefit}</li>)}
+    </ul>
+    <p className="sw-onboarding-note">{WELCOME.note}</p>
   </>;
 }
 
+const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((item) => b.includes(item));
+
 /**
- * Authenticated per-step persistence. consentOnly shows just the consent page (re-consent of a
- * completed account to the current documents) and calls onCheckin once it is confirmed.
+ * The new onboarding. Every answer is saved before moving on; reopening resumes from the saved
+ * answers. consentOnly — just the consent page (re-consent of a completed account); editTopics —
+ * topics and priority from the cabinet. onCheckin is called when the flow is finished.
  */
-export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
+export default function OnboardingFlow({ onCheckin, consentOnly = false, editTopics = false }: {
   onCheckin: () => void | Promise<void>;
   consentOnly?: boolean;
+  editTopics?: boolean;
 }) {
-  const [step, setStep] = useState(consentOnly ? 1 : 0);
+  const full = !consentOnly && !editTopics;
+  const [step, setStep] = useState<number>(consentOnly ? STEP.consent : editTopics ? STEP.topics : STEP.welcome);
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'ready' | 'error'>(consentOnly ? 'ready' : 'loading');
+  const [terms, setTerms] = useState(false);
+  const [privacy, setPrivacy] = useState(false);
+  const [name, setName] = useState('');
+  const [topics, setTopics] = useState<string[]>([]);
+  const [priority, setPriority] = useState('');
+  // What the server has confirmed; the review and the map show only this.
+  const [saved, setSaved] = useState<{ name: string | null; topics: string[]; priority: string }>({ name: null, topics: [], priority: '' });
+  const [returnToReview, setReturnToReview] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  const [error, setError] = useState('');
+  const heading = useRef<HTMLHeadingElement>(null);
   // Re-consent page only: a woman who does not want to consent again can still request deletion.
   const [deletion, setDeletion] = useState<'idle' | 'confirm' | 'sending' | 'done' | 'error'>('idle');
+
+  useEffect(() => {
+    if (loadStatus !== 'loading') return;
+    let cancelled = false;
+    apiFetch<MeOnboarding>('/me')
+      .then((me) => {
+        if (cancelled) return;
+        const savedTopics = Array.isArray(me.focusTopics) ? me.focusTopics.filter((t) => TOPICS.some((x) => x.key === t)) : [];
+        const savedPriority = typeof me.focusPriority === 'string' ? me.focusPriority : '';
+        setSaved({ name: me.displayName, topics: savedTopics, priority: savedPriority });
+        setName(me.displayName ?? getTelegramFirstName() ?? '');
+        setTopics(savedTopics);
+        setPriority(savedPriority);
+        if (full) {
+          // Resume from what is already saved; a completed step is never asked again blindly.
+          setStep(me.consents?.current !== true ? STEP.welcome
+            : savedTopics.length === 0 ? STEP.name
+            : !savedPriority ? STEP.priority : STEP.review);
+        }
+        setLoadStatus('ready');
+      })
+      .catch(() => { if (!cancelled) setLoadStatus('error'); });
+    return () => { cancelled = true; };
+  }, [loadStatus, full]);
+
+  useEffect(() => {
+    if (loadStatus !== 'ready') return;
+    heading.current?.focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+    // Dropped while there is no consent (analytics is off), so steps 1–2 are not recorded.
+    if (full) track({ name: 'onboarding_step_view', step: step + 1 });
+  }, [step, full, loadStatus]);
+  const stepDone = (index: number) => { if (full) track({ name: 'onboarding_step_done', step: index + 1 }); };
+  const stepError = (index: number, e: unknown) => {
+    if (full) track({ name: 'onboarding_error', step: index + 1, errorKind: errorKindOf(e) });
+  };
+
+  const enabled = loadStatus === 'ready' && !busy && (
+    step === STEP.consent ? terms && privacy
+      : step === STEP.topics ? topics.length > 0
+      : step === STEP.priority ? !!priority && (priority === PRIORITY_UNSURE || topics.includes(priority))
+      : true);
+
+  const go = (to: number) => { setError(''); setStep(to); };
+  const goEdit = (to: number) => { setReturnToReview(true); go(to); };
+  const back = () => {
+    if (inFlight.current) return;
+    setReturnToReview(false);
+    go(Math.max(editTopics ? STEP.topics : 0, step - 1));
+  };
+
+  // Runs one save with a lock against double taps; errors are shown, never hidden.
+  const run = async (index: number, action: () => Promise<void>, message: string) => {
+    inFlight.current = true; setBusy(true); setError('');
+    try {
+      await action();
+    } catch (e) {
+      stepError(index, e);
+      setError(message);
+    } finally {
+      inFlight.current = false; setBusy(false);
+    }
+  };
+
+  const next = async () => {
+    if (!enabled || inFlight.current) return;
+    const index = step;
+    if (step === STEP.welcome) { stepDone(index); go(STEP.consent); return; }
+    if (step === STEP.consent) {
+      await run(index, async () => {
+        // Versioned, server-confirmed record; a retry after a lost response does not duplicate.
+        await saveConsents(consentOnly ? 'reconsent' : 'onboarding_v2');
+        stepDone(index);
+        if (consentOnly) await onCheckin();
+        else go(returnToReview ? STEP.review : STEP.name);
+      }, 'Не удалось подтвердить сохранение согласий. Попробуйте ещё раз.');
+      return;
+    }
+    if (step === STEP.name) {
+      await run(index, async () => {
+        const trimmed = name.trim();
+        // Optional: blank keeps what is stored. Never /profile (it replaces email/phone too).
+        if (trimmed && trimmed !== saved.name) {
+          const result = await apiFetch<{ ok: boolean }>('/anketa/name', { method: 'POST', body: JSON.stringify({ displayName: trimmed }) });
+          if (result.ok !== true) throw new Error('Name save not confirmed');
+          setSaved((current) => ({ ...current, name: trimmed }));
+        }
+        stepDone(index);
+        setReturnToReview(false);
+        go(returnToReview ? STEP.review : STEP.topics);
+      }, 'Не удалось сохранить. Попробуйте ещё раз.');
+      return;
+    }
+    if (step === STEP.topics) {
+      await run(index, async () => {
+        let savedPriority = saved.priority;
+        if (!sameSet(topics, saved.topics)) {
+          const result = await apiFetch<{ ok: boolean; focusTopics: string[]; focusPriority: string | null }>(
+            '/anketa/topics', { method: 'POST', body: JSON.stringify({ topics }) });
+          if (result.ok !== true) throw new Error('Topics save not confirmed');
+          // The server clears a priority that is no longer among the chosen topics.
+          savedPriority = result.focusPriority ?? '';
+          setSaved((current) => ({ ...current, topics: result.focusTopics, priority: savedPriority }));
+          setPriority(savedPriority);
+        }
+        stepDone(index);
+        const priorityStillValid = !!savedPriority;
+        if (full && returnToReview && priorityStillValid) { setReturnToReview(false); go(STEP.review); }
+        else go(STEP.priority);
+      }, 'Не удалось сохранить. Попробуйте ещё раз.');
+      return;
+    }
+    if (step === STEP.priority) {
+      await run(index, async () => {
+        if (priority !== saved.priority) {
+          const result = await apiFetch<{ ok: boolean }>('/anketa/priority', { method: 'POST', body: JSON.stringify({ priority }) });
+          if (result.ok !== true) throw new Error('Priority save not confirmed');
+          setSaved((current) => ({ ...current, priority }));
+        }
+        stepDone(index);
+        setReturnToReview(false);
+        if (editTopics) await onCheckin();
+        else go(STEP.review);
+      }, 'Не удалось сохранить. Попробуйте ещё раз.');
+      return;
+    }
+    if (step === STEP.review) { stepDone(index); go(STEP.map); return; }
+    if (step === STEP.map) {
+      await run(index, async () => { await onCheckin(); }, 'Не удалось завершить сохранение. Попробуйте ещё раз.');
+    }
+  };
+
   const requestDeletion = async () => {
     setDeletion('sending');
     try {
@@ -110,219 +232,60 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
       setDeletion('error');
     }
   };
-  const [terms, setTerms] = useState(false);
-  const [privacy, setPrivacy] = useState(false);
-  const [name, setName] = useState(() => getTelegramFirstName() ?? '');
-  const [age, setAge] = useState('');
-  const [ageTouched, setAgeTouched] = useState(false);
-  const [cycle, setCycle] = useState('');
-  const [hrt, setHrt] = useState('');
-  const [answersStatus, setAnswersStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [savingAnswer, setSavingAnswer] = useState(false);
-  const [answerError, setAnswerError] = useState('');
-  const answerInFlight = useRef(false);
-  const savedAnswers = useRef({ cycleSituation: '', mhtStatus: '' });
-  const [finishing, setFinishing] = useState(false);
-  const [completionError, setCompletionError] = useState('');
-  const completionInFlight = useRef(false);
-  const [savingConsent, setSavingConsent] = useState(false);
-  const [consentError, setConsentError] = useState('');
-  const consentInFlight = useRef(false);
-  const [profileStatus, setProfileStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [profileError, setProfileError] = useState('');
-  const profileInFlight = useRef(false);
-  const savedProfile = useRef<{ displayName: string | null; age: number | null }>({ displayName: null, age: null });
-  const profileBusy = step === 2 && (profileStatus === 'loading' || savingProfile);
-  const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    if (step !== 2 || profileStatus !== 'loading') return;
-    let cancelled = false;
-    apiFetch<{ displayName: string | null; age: number | null }>('/me')
-      .then((me) => {
-        if (cancelled) return;
-        if ((me.displayName !== null && typeof me.displayName !== 'string') ||
-          (me.age !== null && (!Number.isInteger(me.age) || me.age < 18 || me.age > 100))) {
-          throw new Error('Profile unavailable');
-        }
-        savedProfile.current = { displayName: me.displayName, age: me.age };
-        setName((current) => me.displayName ?? current);
-        setAge(me.age === null ? '' : String(me.age));
-        setProfileError('');
-        setProfileStatus('ready');
-      })
-      .catch(() => {
-        if (!cancelled) setProfileStatus('error');
-      });
-    return () => { cancelled = true; };
-  }, [step, profileStatus]);
-  useEffect(() => {
-    if ((step !== 3 && step !== 4) || answersStatus !== 'loading') return;
-    let cancelled = false;
-    apiFetch<{ cycleSituation: string | null; mhtStatus: string | null }>('/me')
-      .then((me) => {
-        if (cancelled) return;
-        if ((me.cycleSituation !== null && !CYCLE_OPTIONS.some(([key]) => key === me.cycleSituation)) ||
-          (me.mhtStatus !== null && !HRT_OPTIONS.some(([key]) => key === me.mhtStatus))) {
-          throw new Error('Answers unavailable');
-        }
-        savedAnswers.current = { cycleSituation: me.cycleSituation ?? '', mhtStatus: me.mhtStatus ?? '' };
-        setCycle(savedAnswers.current.cycleSituation);
-        setHrt(savedAnswers.current.mhtStatus);
-        setAnswersStatus('ready');
-      })
-      .catch(() => { if (!cancelled) setAnswersStatus('error'); });
-    return () => { cancelled = true; };
-  }, [step, answersStatus]);
-  // Match the existing age endpoint; no 40+ restriction and no age categories.
-  const invalidAge = age !== '' && (!/^\d+$/.test(age) || Number(age) < 18 || Number(age) > 100);
-  const enabled = step === 1 ? terms && privacy : step === 2 ? !invalidAge && profileStatus === 'ready' && !savingProfile : step === 3 || step === 4 ? answersStatus === 'ready' && !savingAnswer && !!(step === 3 ? cycle : hrt) : true;
-  const back = () => { setAnswerError(''); setStep((value) => Math.max(0, value - 1)); };
-  const next = async () => {
-    if (!enabled || consentInFlight.current || profileInFlight.current || answerInFlight.current || completionInFlight.current) return;
-    if (step === 1) {
-      consentInFlight.current = true;
-      setSavingConsent(true);
-      setConsentError('');
-      try {
-        // Versioned, server-confirmed record (consent_events). The server does not duplicate
-        // an already-current consent, so a retry after a lost response is safe.
-        await saveConsents(consentOnly ? 'reconsent' : 'onboarding_v2');
-        stepDone(1);
-        if (consentOnly) await onCheckin();
-        else setStep(2);
-      } catch (error) {
-        stepError(1, error);
-        setConsentError('Не удалось подтвердить сохранение согласий. Попробуйте ещё раз.');
-      } finally {
-        consentInFlight.current = false;
-        setSavingConsent(false);
-      }
-      return;
-    }
-    if (step === 2) {
-      profileInFlight.current = true;
-      setSavingProfile(true);
-      setProfileError('');
-      try {
-        const trimmed = name.trim();
-        // Blank optional inputs preserve stored answers; never use /profile,
-        // which also replaces unrelated email/phone fields.
-        if (trimmed && trimmed !== savedProfile.current.displayName) {
-          const result = await apiFetch<{ ok: boolean }>('/anketa/name', {
-            method: 'POST', body: JSON.stringify({ displayName: trimmed }),
-          });
-          if (result.ok !== true) throw new Error('Name save not confirmed');
-          savedProfile.current.displayName = trimmed;
-        }
-        if (age !== '' && Number(age) !== savedProfile.current.age) {
-          const result = await apiFetch<{ ok: boolean }>('/anketa/age', {
-            method: 'POST', body: JSON.stringify({ age: Number(age) }),
-          });
-          if (result.ok !== true) throw new Error('Age save not confirmed');
-          savedProfile.current.age = Number(age);
-        }
-        setName(savedProfile.current.displayName ?? '');
-        setAge(savedProfile.current.age === null ? '' : String(savedProfile.current.age));
-        stepDone(2);
-        setStep(3);
-      } catch (error) {
-        stepError(2, error);
-        setProfileError('Не удалось сохранить. Попробуйте ещё раз.');
-      } finally {
-        profileInFlight.current = false;
-        setSavingProfile(false);
-      }
-      return;
-    }
-    if (step === 3 || step === 4) {
-      answerInFlight.current = true;
-      setSavingAnswer(true);
-      setAnswerError('');
-      const field = step === 3 ? 'cycleSituation' : 'mhtStatus';
-      const value = step === 3 ? cycle : hrt;
-      try {
-        if (savedAnswers.current[field] !== value) {
-          const result = await apiFetch<{ ok: boolean }>(step === 3 ? '/anketa/cycle-situation' : '/anketa/mht-status', {
-            method: 'POST', body: JSON.stringify({ [field]: value }),
-          });
-          if (result.ok !== true) throw new Error('Answer save not confirmed');
-          savedAnswers.current[field] = value;
-        }
-        stepDone(step);
-        setStep(step + 1);
-      } catch (error) {
-        stepError(step, error);
-        // A write may have succeeded even if its response was lost. Do not skip
-        // a retry based on an older cached value, including a reselected answer.
-        savedAnswers.current[field] = '';
-        setAnswerError('Не удалось сохранить. Попробуйте ещё раз.');
-      } finally {
-        answerInFlight.current = false;
-        setSavingAnswer(false);
-      }
-      return;
-    }
-    if (step === 5) {
-      completionInFlight.current = true;
-      setFinishing(true);
-      setCompletionError('');
-      try {
-        await onCheckin();
-      } catch (error) {
-        stepError(5, error);
-        setCompletionError('Не удалось завершить сохранение. Попробуйте ещё раз.');
-      } finally {
-        completionInFlight.current = false;
-        setFinishing(false);
-      }
-    } else { stepDone(step); setStep(step + 1); }
-  };
-  const cta = step === 0 ? 'Начать мою историю 360°' : step === 5 ? 'Отметить самочувствие →' : 'Продолжить';
 
-  useBackButton(step > 0 && !consentOnly ? () => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current && !completionInFlight.current) back(); } : null);
+  const cta = step === STEP.welcome ? WELCOME.button
+    : step === STEP.review ? TEXT.reviewButton
+    : step === STEP.map ? TEXT.mapButton
+    : editTopics && step === STEP.priority ? 'Сохранить' : 'Продолжить';
+  const canGoBack = full ? step > STEP.welcome : editTopics && step > STEP.topics;
+
+  useBackButton(canGoBack ? back : null);
   useMainButton({ text: cta, onClick: next, isVisible: false });
-  useEffect(() => {
-    heading.current?.focus({ preventScroll: true });
-    window.scrollTo(0, 0);
-    // Dropped while there is no consent (analytics is off), so steps 1–2 are not recorded.
-    if (!consentOnly) track({ name: 'onboarding_step_view', step: step + 1 });
-  }, [step, consentOnly]);
-  const stepDone = (index: number) => { if (!consentOnly) track({ name: 'onboarding_step_done', step: index + 1 }); };
-  const stepError = (index: number, error: unknown) => {
-    if (!consentOnly) track({ name: 'onboarding_error', step: index + 1, errorKind: errorKindOf(error) });
-  };
+
+  if (loadStatus !== 'ready') {
+    return <main className="sw-onboarding" lang="ru">
+      <section className="sw-onboarding-content">
+        {loadStatus === 'loading' ? <p role="status">Загружаем ваши данные…</p> : <>
+          <p role="alert">Не удалось загрузить ваши данные. Попробуйте ещё раз.</p>
+          <button type="button" className="sw-onboarding-link" onClick={() => setLoadStatus('loading')}>Повторить загрузку</button>
+        </>}
+      </section>
+    </main>;
+  }
+
+  const priorityOptions = [...TOPICS.filter((t) => topics.includes(t.key)).map((t) => ({ key: t.key as string, label: t.title })),
+    { key: PRIORITY_UNSURE as string, label: TEXT.priorityUnsure }];
 
   return <main className="sw-onboarding" lang="ru">
-    {!consentOnly && <><header className="sw-onboarding-header">
-      {step > 0 ? <button type="button" className="sw-onboarding-back" disabled={savingConsent || savingProfile || savingAnswer || finishing} onClick={() => { if (!consentInFlight.current && !profileInFlight.current && !answerInFlight.current && !completionInFlight.current) back(); }}>← Назад</button> : <span />}
-      <span aria-label={`Шаг ${step + 1} из 6`}>{step + 1}/6</span>
-    </header>
-    <div className="sw-onboarding-progress" aria-hidden="true">
+    {(full || canGoBack) && <header className="sw-onboarding-header">
+      {canGoBack ? <button type="button" className="sw-onboarding-back" disabled={busy} onClick={back}>← Назад</button> : <span />}
+      {full && <span aria-label={`Шаг ${step + 1} из ${TOTAL}`}>{step + 1}/{TOTAL}</span>}
+    </header>}
+    {full && <div className="sw-onboarding-progress" aria-hidden="true">
       {TITLES.map((title, index) => <span key={title} data-complete={index <= step} />)}
-    </div></>}
+    </div>}
     <section className="sw-onboarding-content">
-      {step === 0 && <img className="sw-onboarding-logo" src={logo} alt="SanaWell AI" />}
+      {step === STEP.welcome && <img className="sw-onboarding-logo" src={logo} alt="SanaWell AI" />}
       <h1 id="onboarding-title" tabIndex={-1} ref={heading}>{TITLES[step]}</h1>
-      {step === 0 && <WelcomeText />}
-      {step === 1 && <>
+      {step === STEP.welcome && <WelcomeText />}
+
+      {step === STEP.consent && <>
         <p>SanaWell AI сохраняет информацию, которую вы сами добавляете о своём самочувствии, чтобы показывать вашу историю и личную динамику.</p>
         <div className="sw-onboarding-option sw-onboarding-consent">
-          <input id="onboarding-terms" type="checkbox" checked={terms} disabled={savingConsent} onChange={(event) => { if (!consentInFlight.current) setTerms(event.target.checked); }} />
+          <input id="onboarding-terms" type="checkbox" checked={terms} disabled={busy} onChange={(event) => { if (!inFlight.current) setTerms(event.target.checked); }} />
           <div><label htmlFor="onboarding-terms">Я принимаю Условия использования.</label>
             <a className="sw-onboarding-link" href={legalDocumentUrl('terms')} target="_blank" rel="noopener noreferrer" onClick={() => track({ name: 'legal_doc_open', doc: 'terms' })}>{legalDocumentTitle('terms')}</a>
           </div>
         </div>
         <div className="sw-onboarding-option sw-onboarding-consent">
-          <input id="onboarding-privacy" type="checkbox" checked={privacy} disabled={savingConsent} onChange={(event) => { if (!consentInFlight.current) setPrivacy(event.target.checked); }} />
+          <input id="onboarding-privacy" type="checkbox" checked={privacy} disabled={busy} onChange={(event) => { if (!inFlight.current) setPrivacy(event.target.checked); }} />
           <div><label htmlFor="onboarding-privacy">Я ознакомилась с Политикой конфиденциальности и даю согласие на сбор и обработку персональных данных.</label>
             <a className="sw-onboarding-link" href={legalDocumentUrl('privacy')} target="_blank" rel="noopener noreferrer" onClick={() => track({ name: 'legal_doc_open', doc: 'privacy' })}>{legalDocumentTitle('privacy')}</a>
             <a className="sw-onboarding-link" href={legalDocumentUrl('dataConsent')} target="_blank" rel="noopener noreferrer" onClick={() => track({ name: 'legal_doc_open', doc: 'dataConsent' })}>{legalDocumentTitle('dataConsent')}</a>
           </div>
         </div>
         <p className="sw-onboarding-note">Документы — рабочие проекты для закрытой MVP-фокус-группы. Перед публичным запуском требуется финальная юридическая проверка.</p>
-        {savingConsent && <p role="status">Сохраняем ваши согласия…</p>}
-        {consentError && <p role="alert">{consentError}</p>}
+        {busy && <p role="status">Сохраняем ваши согласия…</p>}
         {consentOnly && <div className="sw-onboarding-note">
           {deletion === 'idle' && <><p>Если вы не хотите давать согласие, можно запросить удаление ваших данных.</p>
             <button type="button" className="sw-onboarding-link" onClick={() => setDeletion('confirm')}>Запросить удаление данных</button></>}
@@ -336,40 +299,68 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
           {deletion === 'done' && <p role="status">Запрос на удаление принят. Новые данные не сохраняются.</p>}
         </div>}
       </>}
-      {step === 2 && <>
-        <p>Это поможет SanaWell сделать вашу историю более личной.</p>
+
+      {step === STEP.name && <>
+        <p>{TEXT.nameHint}</p>
         <div className="sw-onboarding-fields">
-          <label htmlFor="onboarding-name">Как к вам обращаться?</label>
-          <input id="onboarding-name" autoComplete="given-name" maxLength={100} placeholder="Надира" value={name} disabled={profileBusy || profileStatus !== 'ready'} onChange={(event) => { if (!profileInFlight.current) setName(event.target.value); }} />
-          <label htmlFor="onboarding-age">Сколько вам лет?</label>
-          <input id="onboarding-age" type="text" inputMode="numeric" maxLength={3} placeholder="49" value={age}
-            disabled={profileBusy || profileStatus !== 'ready'} onChange={(event) => { if (!profileInFlight.current) setAge(event.target.value); }} onBlur={() => setAgeTouched(true)}
-            aria-invalid={ageTouched && invalidAge} aria-describedby={ageTouched && invalidAge ? 'onboarding-age-error' : undefined} />
-          {ageTouched && invalidAge && <p id="onboarding-age-error" role="alert">Введите возраст целым числом от 18 до 100.</p>}
+          <label htmlFor="onboarding-name">Имя</label>
+          <input id="onboarding-name" autoComplete="given-name" maxLength={100} placeholder={TEXT.namePlaceholder} value={name}
+            disabled={busy} onChange={(event) => { if (!inFlight.current) setName(event.target.value); }} />
         </div>
-        {profileBusy && <p role="status">{savingProfile ? 'Сохраняем…' : 'Загружаем ваши данные…'}</p>}
-        {profileStatus === 'error' && <><p role="alert">Не удалось загрузить ваши данные. Попробуйте ещё раз.</p><button type="button" className="sw-onboarding-link" onClick={() => setProfileStatus('loading')}>Повторить загрузку</button></>}
-        {profileError && <p role="alert">{profileError}</p>}
       </>}
-      {step === 3 && <>
-        <p>Что сейчас больше похоже на вашу ситуацию?<br />Выберите ближайший вариант — здесь нет правильного или неправильного ответа.</p>
-        <Options name="cycle" options={CYCLE_OPTIONS} value={cycle} onChange={setCycle} disabled={answersStatus !== 'ready' || savingAnswer} />
+
+      {step === STEP.topics && <>
+        <p>{TEXT.topicsHint}</p>
+        <fieldset className="sw-onboarding-options" aria-labelledby="onboarding-title" disabled={busy}>
+          {TOPICS.map((topic) => <label className="sw-onboarding-option" key={topic.key}>
+            <input type="checkbox" value={topic.key} checked={topics.includes(topic.key)}
+              onChange={(event) => setTopics((current) => event.target.checked
+                ? [...current, topic.key] : current.filter((t) => t !== topic.key))} />
+            <span>{topic.title}</span>
+          </label>)}
+        </fieldset>
       </>}
-      {step === 4 && <>
-        <p>Это поможет вашему дневнику лучше отражать вашу историю.<br />Мы не оцениваем и не корректируем назначенную терапию.</p>
-        <Options name="hrt" options={HRT_OPTIONS} value={hrt} onChange={setHrt} disabled={answersStatus !== 'ready' || savingAnswer} />
+
+      {step === STEP.priority && <>
+        <p>{TEXT.priorityHint}</p>
+        <fieldset className="sw-onboarding-options" aria-labelledby="onboarding-title" disabled={busy}>
+          {priorityOptions.map((option) => <label className="sw-onboarding-option" key={option.key}>
+            <input type="radio" name="priority" value={option.key} checked={priority === option.key} onChange={() => setPriority(option.key)} />
+            <span>{option.label}</span>
+          </label>)}
+        </fieldset>
       </>}
-      {(step === 3 || step === 4) && <>
-        {(answersStatus === 'loading' || savingAnswer) && <p role="status">{savingAnswer ? 'Сохраняем…' : 'Загружаем ваши данные…'}</p>}
-        {answersStatus === 'error' && <><p role="alert">Не удалось загрузить ваши данные. Попробуйте ещё раз.</p><button type="button" className="sw-onboarding-link" onClick={() => setAnswersStatus('loading')}>Повторить загрузку</button></>}
-        {answerError && <p role="alert">{answerError}</p>}
+
+      {step === STEP.review && <div className="sw-onboarding-review">
+        {[
+          [TEXT.reviewName, saved.name || TEXT.reviewNameEmpty, STEP.name],
+          [TEXT.reviewTopics, saved.topics.map(topicTitle).join(', '), STEP.topics],
+          [TEXT.reviewPriority, saved.priority === PRIORITY_UNSURE ? TEXT.priorityUnsure : topicTitle(saved.priority), STEP.priority],
+        ].map(([label, value, target]) => <div className="sw-onboarding-review-row" key={label as string}>
+          <div><span className="sw-onboarding-review-label">{label}</span><span>{value}</span></div>
+          <button type="button" className="sw-onboarding-link" disabled={busy} onClick={() => goEdit(target as number)}
+            aria-label={`${TEXT.edit}: ${label}`}>{TEXT.edit}</button>
+        </div>)}
+      </div>}
+
+      {step === STEP.map && <>
+        <div className="sw-onboarding-map-card sw-onboarding-map-focus">
+          <span className="sw-onboarding-review-label">{TEXT.mapFocus}</span>
+          <strong>{saved.priority === PRIORITY_UNSURE ? TEXT.mapFocusUnsure : topicTitle(saved.priority)}</strong>
+        </div>
+        <div className="sw-onboarding-map-card">
+          <span className="sw-onboarding-review-label">{TEXT.mapTopics}</span>
+          <ul className="sw-onboarding-map-list">
+            {TOPICS.filter((t) => saved.topics.includes(t.key)).map((t) => <li key={t.key}>
+              <span>{t.title}</span><span className="sw-onboarding-option-hint">{TEXT.mapWhere(t.homeCard)}</span>
+            </li>)}
+          </ul>
+        </div>
+        <p>{TEXT.mapNext}</p>
       </>}
-      {step === 5 && <>
-        <p>Теперь просто расскажите, как вы сегодня.<br />Это займёт меньше минуты.</p>
-        <div className="sw-onboarding-note"><p>Ваши отметки будут складываться в личную историю.</p><p>Со временем вы сможете видеть, что меняется именно у вас.</p></div>
-        {completionError && <p role="alert">{completionError}</p>}
-      </>}
+
+      {error && <p role="alert">{error}</p>}
     </section>
-    <footer className="sw-onboarding-footer"><button type="button" className="sw-onboarding-primary" disabled={!enabled || savingConsent || finishing} aria-busy={savingConsent || savingProfile || savingAnswer || finishing} onClick={next}>{savingConsent || savingProfile || savingAnswer || finishing ? 'Сохраняем…' : cta}</button></footer>
+    <footer className="sw-onboarding-footer"><button type="button" className="sw-onboarding-primary" disabled={!enabled} aria-busy={busy} onClick={next}>{busy ? 'Сохраняем…' : cta}</button></footer>
   </main>;
 }

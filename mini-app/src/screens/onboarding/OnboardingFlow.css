@@ -49,3 +49,15 @@
   .sw-onboarding h1 { font-size: 26px; }
   .sw-onboarding-option { padding: 12px; }
 }
+/* New onboarding: welcome benefits, review rows and the start map (existing tokens only). */
+.sw-onboarding-benefits { list-style: none; padding: 0; margin: 0 0 20px; display: grid; gap: 10px; }
+.sw-onboarding-benefits li { padding: 14px 16px; border-radius: 16px; background: var(--sw-primary-soft); font-weight: 600; }
+.sw-onboarding-review { display: grid; gap: 10px; }
+.sw-onboarding-review-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px; border: 1px solid var(--sw-v3-border); border-radius: 18px; background: var(--sw-v3-surface); }
+.sw-onboarding-review-row > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.sw-onboarding-review-row .sw-onboarding-link { flex: 0 0 auto; padding: 0 0 0 8px; }
+.sw-onboarding-review-label { display: block; font-size: 16px; color: var(--sw-v3-ink-soft); }
+.sw-onboarding-map-card { display: flex; flex-direction: column; gap: 6px; padding: 18px; margin: 0 0 12px; border: 1px solid var(--sw-v3-border); border-radius: 20px; background: var(--sw-v3-surface); }
+.sw-onboarding-map-focus { background: var(--sw-primary-soft); border-color: transparent; }
+.sw-onboarding-map-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.sw-onboarding-map-list li { display: flex; flex-direction: column; }

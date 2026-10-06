@@ -10,7 +10,7 @@ const legal = require('../src/lib/legal-documents.json');
 const recordFor = overrides => ({
   onboardingVersion: 'v2', consents: { current: false }, onboardingWelcomeSeen: false, onboardingAnketaCompleted: false,
   medicalDisclaimerConsented: true, dataStorageConsented: true, onboarded: false,
-  displayName: 'Надира', age: 49, cycleSituation: 'unsure', mhtStatus: 'prefer_not_to_say',
+  displayName: 'Надира', age: 49, focusTopics: ['sleep'], focusPriority: 'unsure',
   language: 'ru', menopausePath: null, symptomChecklist: null, ...overrides,
 });
 async function telegramPage(browser, startParam) {
@@ -47,8 +47,8 @@ async function normalRead(route, path, checkin = null) {
   try {
     // The server decides the version; the regular bot button (no query, no start_param) is enough.
     for (const [name, overrides, selector, newFlow] of [
-      ['v2-regular-button', {}, 'text=Добро пожаловать в SanaWell AI', true],
-      ['v2-ignores-old-opt-in-absence', { onboardingWelcomeSeen: true }, 'text=Добро пожаловать в SanaWell AI', true],
+      ['v2-regular-button', {}, 'text=Вы не одна. И разбираться во всём самой не нужно', true],
+      ['v2-ignores-old-opt-in-absence', { onboardingWelcomeSeen: true }, 'text=Вы не одна. И разбираться во всём самой не нужно', true],
       ['legacy-new', { onboardingVersion: 'legacy' }, '.onboarding-welcome', false],
       ['legacy-incomplete', { onboardingVersion: 'legacy', onboardingWelcomeSeen: true, consents: { current: true } }, '#anketa-name', false],
       ['legacy-incomplete-no-consent', { onboardingVersion: 'legacy', onboardingWelcomeSeen: true }, '.consent-policy-link >> nth=0', false],
@@ -82,7 +82,7 @@ async function normalRead(route, path, checkin = null) {
       await page.goto(base); await page.getByRole('heading', { name: 'Не удалось загрузить данные' }).waitFor();
       assert.equal(await page.locator('.onboarding-welcome').count(), 0); // never a guessed flow
       failing = false; await page.getByRole('button', { name: 'Повторить', exact: true }).click();
-      await page.getByText('Добро пожаловать в SanaWell AI').waitFor();
+      await page.getByText('Вы не одна. И разбираться во всём самой не нужно').waitFor();
       console.log('PASS gate: start failure shows retry, then the server-chosen flow'); await page.close();
     }
     {
@@ -97,13 +97,13 @@ async function normalRead(route, path, checkin = null) {
       await page.goto(base); await page.locator('.sw-greeting').waitFor();
       await page.getByRole('button', { name: 'Профиль', exact: true }).click();
       await page.getByRole('button', { name: 'Показать приветствие снова', exact: true }).click();
-      await page.getByRole('heading', { name: 'Добро пожаловать в SanaWell AI' }).waitFor();
+      await page.getByRole('heading', { name: 'Вы не одна. И разбираться во всём самой не нужно' }).waitFor();
       assert.equal(await page.locator('.sw-onboarding-progress').count(), 0);
-      assert.equal(await page.getByRole('button', { name: 'Начать мою историю 360°' }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Начать знакомство' }).count(), 0);
       await page.getByRole('button', { name: 'Вернуться', exact: true }).click();
       await page.getByRole('button', { name: 'Показать приветствие снова', exact: true }).waitFor();
       await page.getByRole('button', { name: 'Показать приветствие снова', exact: true }).click();
-      await page.getByRole('heading', { name: 'Добро пожаловать в SanaWell AI' }).waitFor();
+      await page.getByRole('heading', { name: 'Вы не одна. И разбираться во всём самой не нужно' }).waitFor();
       await back(page); await page.getByRole('button', { name: 'Показать приветствие снова', exact: true }).waitFor();
       assert.deepEqual(writes, []);
       console.log('PASS welcome again: new welcome, read-only, returns to the cabinet'); await page.close();
@@ -191,24 +191,25 @@ async function normalRead(route, path, checkin = null) {
       });
       await page.goto(base);
       assert.equal(await page.locator('aside').count(), 0); // No preview wrapper.
-      await page.getByRole('button', { name: 'Начать мою историю 360°' }).click();
+      await page.getByRole('button', { name: 'Начать знакомство' }).click();
       await page.getByRole('checkbox').nth(0).check(); await page.getByRole('checkbox').nth(1).check();
       const next = page.getByRole('button', { name: 'Продолжить', exact: true }); await next.click();
       await page.waitForFunction(() => !document.querySelector('#onboarding-name')?.disabled); await next.click();
-      await page.waitForFunction(() => !!document.querySelector('input[value=unsure]:checked') && !document.querySelector('fieldset').disabled); await next.click();
-      await page.locator('input[value=prefer_not_to_say]:checked').waitFor(); await next.click();
-      await page.getByRole('heading', { name: 'Начнём вашу историю 360°' }).waitFor(); finalStep = true;
+      await page.locator('input[value=sleep]:checked').waitFor(); await next.click();
+      await page.locator('input[value=unsure]:checked').waitFor(); await next.click();
+      await page.getByRole('button', { name: 'Всё верно', exact: true }).click();
+      await page.getByRole('heading', { name: 'Ваша стартовая карта' }).waitFor(); finalStep = true;
       assert.deepEqual(writes, []);
       const finish = page.getByRole('button', { name: 'Отметить самочувствие →', exact: true });
       if (scenario === 'duplicate') {
         await finish.evaluate(b => { b.click(); b.click(); b.click(); }); await waiting;
         assert(await page.getByRole('button', { name: 'Сохраняем…', exact: true }).isDisabled());
         assert(await page.getByRole('button', { name: '← Назад' }).isDisabled());
-        await back(page); assert(await page.getByRole('heading', { name: 'Начнём вашу историю 360°' }).isVisible()); release();
+        await back(page); assert(await page.getByRole('heading', { name: 'Ваша стартовая карта' }).isVisible()); release();
       } else await finish.click();
       if (['first-fails','second-fails','lost-first','lost-second','status-fails','invalid-status','unconfirmed'].includes(scenario)) {
         await page.getByRole('alert').waitFor();
-        assert(await page.getByRole('heading', { name: 'Начнём вашу историю 360°' }).isVisible());
+        assert(await page.getByRole('heading', { name: 'Ваша стартовая карта' }).isVisible());
         assert.equal(await page.locator('.checkin-fields').count(), 0); await finish.click();
       }
       await page.locator('.checkin-fields').waitFor();

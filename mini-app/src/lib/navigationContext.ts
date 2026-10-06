@@ -10,6 +10,7 @@ export type ScreenId =
   | 'onboarding-focus-group'
   | 'reconsent'
   | 'welcome-again'
+  | 'topics-edit'
   | 'onboarding-paused'
   | 'welcome'
   | 'consent'

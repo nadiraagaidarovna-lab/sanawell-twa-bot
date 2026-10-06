@@ -7,13 +7,13 @@ const crypto = require('crypto');
 
 const SECTIONS = [
   'home', 'checkin', 'checkin-result', 'progress', 'techniques', 'partners', 'guide', 'body',
-  'ai-assistant', 'cabinet', 'profile-edit', 'tariff', 'welcome-again', 'reconsent',
+  'ai-assistant', 'cabinet', 'profile-edit', 'tariff', 'welcome-again', 'reconsent', 'topics-edit',
 ];
 const DOCS = ['terms', 'privacy', 'dataConsent'];
 const ERROR_KINDS = ['network', 'server', 'consent', 'validation'];
 const MAX_BATCH = 20;
 
-const isStep = (v) => Number.isInteger(v) && v >= 1 && v <= 6;
+const isStep = (v) => Number.isInteger(v) && v >= 1 && v <= 7; // 7-screen onboarding
 const FIELDS = {
   step: isStep,
   section: (v) => SECTIONS.includes(v),

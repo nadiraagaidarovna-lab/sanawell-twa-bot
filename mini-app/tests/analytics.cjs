@@ -16,6 +16,7 @@ function mock(page, record, log) {
     log.push({ at: log.length, path });
     if (path === '/api/me') return route.fulfill({ json: record });
     if (path === '/api/consents') { record.consents = { current: true }; return route.fulfill({ json: { ok: true, current: true, version: legal.version } }); }
+    if (path === '/api/anketa/topics') return route.fulfill({ json: { ok: true, focusTopics: request.postDataJSON().topics, focusPriority: null } });
     if (path.startsWith('/api/anketa/')) return route.fulfill({ json: { ok: true } });
     if (path === '/api/checkin') return route.fulfill({ json: { checkin: null } });
     if (path === '/api/checkin/history') return route.fulfill({ json: { history: [] } });
@@ -47,10 +48,10 @@ function assertClean(all, forbidden) {
       // New woman: nothing before consent; afterwards only step numbers, no answers.
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } }); const log = [];
       const record = { onboardingVersion: 'v2', onboardingAnketaCompleted: false, onboardingWelcomeSeen: false,
-        consents: { current: false }, displayName: null, age: null, cycleSituation: null, mhtStatus: null };
+        consents: { current: false }, displayName: null, focusTopics: [], focusPriority: null };
       await mock(page, record, log);
       await page.goto(base);
-      await page.getByRole('button', { name: 'Начать мою историю 360°' }).click();
+      await page.getByRole('button', { name: 'Начать знакомство' }).click();
       await page.getByRole('link', { name: 'Условия использования', exact: true }).evaluate(a => a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
       await page.getByRole('checkbox').nth(0).check(); await page.getByRole('checkbox').nth(1).check();
       await setVisible(page, false); await setVisible(page, true); // a flush attempt before consent
@@ -58,11 +59,11 @@ function assertClean(all, forbidden) {
       assert.equal(events(log).length, 0, 'no events before consent');
       const next = page.getByRole('button', { name: 'Продолжить', exact: true });
       await next.click();
-      await page.waitForFunction(() => !document.querySelector('#onboarding-name')?.disabled);
-      await page.getByLabel('Как к вам обращаться?').fill('Надира'); await page.getByLabel('Сколько вам лет?').fill('49');
-      await next.click(); await page.getByRole('heading', { name: 'Расскажите немного о вашем цикле' }).waitFor();
-      await page.locator('input[value=post_surgery]').check(); await next.click();
-      await page.getByRole('heading', { name: 'Принимаете ли вы сейчас МГТ/ГЗТ?' }).waitFor();
+      await page.getByRole('heading', { name: 'Как к вам обращаться?' }).waitFor();
+      await page.getByLabel('Имя').fill('Надира'); await next.click();
+      await page.getByRole('heading', { name: 'Что для вас сейчас важно?' }).waitFor();
+      await page.locator('input[value=emotions]').check(); await next.click();
+      await page.getByRole('heading', { name: 'Что для вас главное сейчас?' }).waitFor();
       await setVisible(page, false); // flush
       await page.waitForTimeout(300);
       const all = events(log);
@@ -71,7 +72,7 @@ function assertClean(all, forbidden) {
       assert.deepEqual(all.filter(e => e.name === 'onboarding_step_done').map(e => e.step), [2, 3, 4]);
       assert.deepEqual(all.filter(e => e.name === 'onboarding_step_view').map(e => e.step), [3, 4, 5]);
       assert(!all.some(e => e.step === 1) && !all.some(e => e.name === 'legal_doc_open'), 'pre-consent actions dropped');
-      assertClean(all, ['Надира', '"49"', 'post_surgery', 'regular', 'prefer_not_to_say', 'Тест']);
+      assertClean(all, ['Надира', 'emotions', 'Эмоциональное', 'Тест']);
       console.log(`PASS onboarding: nothing before consent, ${all.length} step events, no answers`);
       await page.close();
     }

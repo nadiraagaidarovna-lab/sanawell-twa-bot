@@ -82,7 +82,7 @@ const ANKETA_STEPS: ScreenId[] = [
 // Sections counted by analytics (open + active time). Onboarding and legacy questionnaire
 // screens are not sections: onboarding steps have their own events.
 const ANALYTICS_SECTIONS: ScreenId[] = ['home', 'checkin', 'progress', 'techniques', 'partners', 'guide',
-  'body', 'ai-assistant', 'cabinet', 'profile-edit', 'tariff', 'welcome-again', 'reconsent'];
+  'body', 'ai-assistant', 'cabinet', 'profile-edit', 'tariff', 'welcome-again', 'reconsent', 'topics-edit'];
 
 function isAnketaStep(screen: ScreenId): boolean {
   return (ANKETA_STEPS as string[]).includes(screen);
@@ -203,6 +203,9 @@ function Screens({
       // Completed account without consent to the current documents: only the consent page,
       // then Home. Onboarding answers and the completion flag are not touched.
       return <OnboardingFlow consentOnly onCheckin={() => reset('home')} />;
+    case 'topics-edit':
+      // Topics and main priority from the cabinet; answers are saved step by step.
+      return <OnboardingFlow editTopics onCheckin={back} />;
     case 'welcome-again':
       return <OnboardingWelcomeAgain onClose={back} />;
     case 'onboarding-paused':

@@ -36,3 +36,20 @@ requests stay available.
 
 Apply `backend/migrations/20261006_consent_events.sql` (and `20260923_onboarding_cycle_mht.sql`)
 to the target database before deploying this code. Legal documents retain their MVP draft status.
+
+## Seven screens (first focus-group launch, Russian)
+
+1. Welcome — «Вы не одна. И разбираться во всём самой не нужно», three benefits, «Начать знакомство».
+2. Consent — two checkboxes, three documents.
+3. Name — optional (blank keeps what is stored).
+4. Topics — the six approved wellness areas, multi-select, at least one (`users.focus_topics`).
+5. Main priority — one of the chosen topics or «Пока не знаю» (`users.focus_priority`).
+6. Review — every answer with «Изменить»; editing returns to the review.
+7. Start map — main focus and chosen topics with where they live on Home; then the existing check-in.
+
+Every answer is saved before moving on. Reopening resumes from saved answers: no consent →
+welcome; no topics → name; no priority → priority; all saved → review. Completion is set only
+from the start map. Name, topics and priority stay editable in the cabinet («Мои темы»).
+Age, cycle and MHT are no longer asked; stored answers and translations are kept. Texts live in
+`mini-app/src/content/onboardingV2.ts`; lines marked DRAFT still need approval.
+Migration: `backend/migrations/20261008_onboarding_topics.sql`.

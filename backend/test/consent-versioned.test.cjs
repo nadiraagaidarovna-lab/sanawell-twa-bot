@@ -38,6 +38,7 @@ async function setup(env = {}) {
   await pg.exec(consentMigration);
   await pg.exec(profileSourceMigration);
   await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations/20261007_app_events.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations/20261008_onboarding_topics.sql'), 'utf8'));
   const saved = {};
   for (const [key, value] of Object.entries(env)) { saved[key] = process.env[key]; process.env[key] = value; }
   const { buildRouter } = load('routes.js', { './db': db });
@@ -77,6 +78,8 @@ const WRITES = [
   ['/anketa/complete', {}],
   ['/checkin', { sleep: 5, mood: 5, memory: 5 }],
   ['/partners/1/click', {}], // stores telegram_id
+  ['/anketa/topics', { topics: ['sleep'] }],
+  ['/anketa/priority', { priority: 'unsure' }],
 ];
 
 test('version comes from the single legal-documents source', () => {
@@ -257,7 +260,7 @@ test('analytics: only after consent, closed whitelist, pseudonymous identifier, 
       { name: 'section_active_time', section: 'home', seconds: 0 },
       { name: 'section_active_time', section: 'home', seconds: 3601 },
       { name: 'section_active_time', section: 'home', seconds: 1.5 },
-      { name: 'onboarding_step_view', step: 7 },
+      { name: 'onboarding_step_view', step: 8 },           // 7 screens
       { name: 'onboarding_error', step: 2, errorKind: 'Не удалось' },
       { name: 'legal_doc_open', doc: 'https://example.com' },
       { name: 'checkin_saved', sleep: 5 },                              // unknown event
@@ -283,4 +286,34 @@ test('analytics: only after consent, closed whitelist, pseudonymous identifier, 
     assert.equal((await request('/consents/withdraw', {})).status, 200);
     assert.equal((await request('/events', { events: [good[4]] })).status, 403); // stops after withdrawal
   } finally { await close(); if (savedToken === undefined) delete process.env.BOT_TOKEN; else process.env.BOT_TOKEN = savedToken; }
+});
+
+test('topics and main priority: validation, consistency, editing, old answers kept', async () => {
+  const { pg, db, request, close } = await setup();
+  try {
+    assert.equal((await request('/consents', GRANT)).status, 200);
+    assert.equal((await request('/anketa/age', { age: 47 })).status, 200);
+    assert.equal((await request('/anketa/cycle-situation', { cycleSituation: 'unsure' })).status, 200);
+    for (const bad of [{}, { topics: [] }, { topics: 'sleep' }, { topics: ['sleep', 'diagnosis'] }, { topics: Array(7).fill('sleep') }]) {
+      assert.equal((await request('/anketa/topics', bad)).status, 400, JSON.stringify(bad));
+    }
+    assert.equal((await request('/anketa/priority', { priority: 'sleep' })).status, 409); // no topics yet
+    let r = await request('/anketa/topics', { topics: ['emotions', 'sleep', 'sleep'] });
+    assert.equal(r.status, 200); assert.deepEqual(r.body.focusTopics, ['sleep', 'emotions']); // canonical order, no duplicates
+    assert.equal((await request('/anketa/priority', { priority: 'nutrition' })).status, 409); // not among topics
+    assert.equal((await request('/anketa/priority', { priority: 'other' })).status, 400);
+    assert.equal((await request('/anketa/priority', { priority: 'emotions' })).status, 200);
+    let me = (await request('/me')).body;
+    assert.deepEqual([me.focusTopics, me.focusPriority], [['sleep', 'emotions'], 'emotions']);
+    r = await request('/anketa/topics', { topics: ['sleep', 'emotions', 'movement'] }); // priority still valid
+    assert.equal(r.body.focusPriority, 'emotions');
+    r = await request('/anketa/topics', { topics: ['sleep'] }); // priority removed -> cleared
+    assert.equal(r.body.focusPriority, null);
+    assert.equal((await request('/anketa/priority', { priority: 'unsure' })).status, 200);
+    r = await request('/anketa/topics', { topics: ['nutrition'] }); // 'unsure' survives topic changes
+    assert.equal(r.body.focusPriority, 'unsure');
+    const user = await db.getUser('101');
+    assert.equal(user.age, 47); assert.equal(user.cycle_situation, 'unsure'); // earlier answers are not removed
+    await assert.rejects(pg.query("UPDATE users SET focus_topics = ARRAY['diagnosis'] WHERE telegram_id='101'"));
+  } finally { await close(); }
 });

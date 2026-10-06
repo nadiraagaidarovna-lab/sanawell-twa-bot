@@ -116,6 +116,8 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         // SELECT * remains compatible before the separate additive migration.
         cycleSituation: user?.cycle_situation ?? null,
         mhtStatus: user?.mht_status ?? null,
+        focusTopics: user?.focus_topics ?? [],
+        focusPriority: user?.focus_priority ?? null,
         email: user ? user.email : null,
         phone: user ? user.phone : null,
         accountDeleted: !!(user && user.deleted_at),
@@ -300,6 +302,40 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
       res.json({ ok: true });
     }));
   }
+
+  // New onboarding: topics (multi-select) and one main priority among them or 'unsure'.
+  // Self-reported choices only, no interpretation. Editable later from the cabinet.
+  router.post('/anketa/topics', requireAuth, consentGate, asyncHandler(async (req, res) => {
+    const { topics } = req.body || {};
+    if (!Array.isArray(topics) || topics.length === 0 || topics.length > db.FOCUS_TOPICS.length ||
+        !topics.every((topic) => db.FOCUS_TOPICS.includes(topic))) {
+      return res.status(400).json({ error: 'invalid_focusTopics' });
+    }
+    try {
+      await db.setFocusTopics(req.telegramId, topics);
+    } catch (error) {
+      if (error.code === '42703') return res.status(503).json({ error: 'onboarding_storage_unavailable' });
+      throw error;
+    }
+    const user = await db.getUser(req.telegramId);
+    res.json({ ok: true, focusTopics: user.focus_topics, focusPriority: user.focus_priority });
+  }));
+
+  router.post('/anketa/priority', requireAuth, consentGate, asyncHandler(async (req, res) => {
+    const { priority } = req.body || {};
+    if (priority !== db.PRIORITY_UNSURE && !db.FOCUS_TOPICS.includes(priority)) {
+      return res.status(400).json({ error: 'invalid_focusPriority' });
+    }
+    let saved;
+    try {
+      saved = await db.setFocusPriority(req.telegramId, priority);
+    } catch (error) {
+      if (error.code === '42703') return res.status(503).json({ error: 'onboarding_storage_unavailable' });
+      throw error;
+    }
+    if (!saved) return res.status(409).json({ error: 'priority_not_in_topics', reason: 'priority_not_in_topics' });
+    res.json({ ok: true });
+  }));
 
   // Шаг 3 — самоощущаемый этап (субъективная самооценка, не диагностический вывод
   // приложения — раздел 9.2 ТЗ).
