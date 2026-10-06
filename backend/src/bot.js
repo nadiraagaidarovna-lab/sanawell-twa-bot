@@ -6,8 +6,16 @@
 // сохранённые через API). Можно запускать и отдельно (`npm run bot`) — например, для
 // локальной отладки без поднятия всего сервера.
 require('dotenv').config();
+const crypto = require('crypto');
 const TelegramBot = require('node-telegram-bot-api');
 const db = require('./db');
+
+const WEBHOOK_PATH = '/telegram/webhook';
+// Telegram secret_token: 1–256 chars of A-Z a-z 0-9 _ -. Derived from the bot token so no extra
+// secret has to be configured; it is never logged.
+function webhookSecret(botToken) {
+  return crypto.createHmac('sha256', 'sanawell-telegram-webhook-v1').update(botToken).digest('hex');
+}
 
 const TEXT = {
   ru: {
@@ -70,6 +78,10 @@ function startBot({
   // сначала смотрим на реальные данные, подтверждено Надирой 10.09.2026).
   habitsReminderIntervalDays = Number(process.env.HABITS_REMINDER_INTERVAL_DAYS || 2),
   reminderCheckIntervalMs = 5 * 60 * 1000,
+  // Express app for the webhook route (server.js passes it) and the public HTTPS base URL;
+  // PUBLIC_URL falls back to WEBAPP_URL (same service).
+  app = null,
+  publicUrl = process.env.PUBLIC_URL,
 } = {}) {
   if (!botToken) {
     console.warn('BOT_TOKEN не задан — бот не запущен (API и фронтенд продолжат работать).');
@@ -81,6 +93,27 @@ function startBot({
   }
 
   const bot = new TelegramBot(botToken, { polling: botMode === 'polling' });
+
+  // Webhook mode (BOT_MODE=webhook): Telegram POSTs each update to our HTTPS endpoint. Needed on
+  // hosts that put an idle service to sleep (Render free): in polling mode a sleeping process never
+  // reads /start, while an incoming webhook request wakes the service. Polling stays the default.
+  if (botMode === 'webhook') {
+    if (!app) {
+      console.warn('BOT_MODE=webhook без Express-приложения — вебхук не подключён.');
+    } else {
+      const secret = webhookSecret(botToken);
+      app.post(WEBHOOK_PATH, (req, res) => {
+        // Only Telegram knows the secret it was given in setWebHook.
+        if (req.get('X-Telegram-Bot-Api-Secret-Token') !== secret) return res.sendStatus(401);
+        bot.processUpdate(req.body);
+        res.sendStatus(200);
+      });
+      const base = (publicUrl || webAppUrl).replace(/\/$/, '');
+      bot.setWebHook(`${base}${WEBHOOK_PATH}`, { secret_token: secret, allowed_updates: ['message', 'callback_query'] })
+        .then(() => console.log(`Вебхук установлен: ${base}${WEBHOOK_PATH}`))
+        .catch((e) => console.error('Не удалось установить вебхук:', e.message));
+    }
+  }
 
   // Срез В консолидации (CLAUDE.md 4.3.1) — /checkin/ теперь единственный главный экран,
   // старый маршрут / упразднён (server.js редиректит его на /checkin/ на случай, если
@@ -99,7 +132,7 @@ function startBot({
         // живёт на одном главном экране Mini App, не за отдельной кнопкой в чате.
         inline_keyboard: [[{ text: `${TEXT.ru.open} / ${TEXT.kk.open}`, web_app: { url: checkinUrl } }]],
       },
-    });
+    }).catch((e) => console.warn('Не удалось ответить на /start:', e.message));
   });
 
   // Кнопка "Отключить" прямо в сообщении с напоминанием — работает в один клик,
@@ -226,4 +259,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { startBot };
+module.exports = { startBot, WEBHOOK_PATH, webhookSecret };
