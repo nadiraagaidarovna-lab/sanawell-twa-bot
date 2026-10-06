@@ -283,7 +283,8 @@ export default function CabinetScreen() {
             <p className="cabinet-heading" style={{ marginTop: 16 }}>
               О приложении
             </p>
-            <button type="button" className="cabinet-btn" onClick={() => push('welcome')}>
+            {/* The new welcome page, view only: no writes, answers and completion untouched. */}
+            <button type="button" className="cabinet-btn" onClick={() => push('welcome-again')}>
               Показать приветствие снова
             </button>
           </section>

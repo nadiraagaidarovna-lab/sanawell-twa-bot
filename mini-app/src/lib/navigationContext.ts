@@ -9,6 +9,7 @@ import { createContext } from 'react';
 export type ScreenId =
   | 'onboarding-focus-group'
   | 'reconsent'
+  | 'welcome-again'
   | 'onboarding-paused'
   | 'welcome'
   | 'consent'

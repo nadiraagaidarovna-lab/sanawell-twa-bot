@@ -18,7 +18,7 @@ import { useNavigation } from './lib/useNavigation';
 import { useBackButton } from './lib/useBackButton';
 import { apiFetch } from './lib/api';
 import { completeFocusGroupOnboarding } from './lib/onboardingFocusGroup';
-import OnboardingFlow, { OnboardingNotice } from './screens/onboarding/OnboardingFlow';
+import OnboardingFlow, { OnboardingNotice, OnboardingWelcomeAgain } from './screens/onboarding/OnboardingFlow';
 import { getTelegramLanguageCode } from './lib/telegram';
 import WelcomeScreen from './screens/WelcomeScreen';
 import ConsentScreen from './screens/ConsentScreen';
@@ -195,6 +195,8 @@ function Screens({
       // Completed account without consent to the current documents: only the consent page,
       // then Home. Onboarding answers and the completion flag are not touched.
       return <OnboardingFlow consentOnly onCheckin={() => reset('home')} />;
+    case 'welcome-again':
+      return <OnboardingWelcomeAgain onClose={back} />;
     case 'onboarding-paused':
       return <OnboardingNotice title="Знакомство временно недоступно"
         text="Мы скоро вернёмся. Попробуйте открыть SanaWell AI немного позже." />;

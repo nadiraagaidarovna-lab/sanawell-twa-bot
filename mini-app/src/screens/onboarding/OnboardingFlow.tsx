@@ -67,6 +67,28 @@ export function OnboardingNotice({ title, text, actionLabel, onAction }: {
   </main>;
 }
 
+/** Read-only repeat of the welcome page from the cabinet: no writes, answers and completion untouched. */
+export function OnboardingWelcomeAgain({ onClose }: { onClose: () => void }) {
+  useMainButton({ text: 'Вернуться', onClick: onClose, isVisible: false });
+  return <main className="sw-onboarding" lang="ru">
+    <section className="sw-onboarding-content">
+      <img className="sw-onboarding-logo" src={logo} alt="SanaWell AI" />
+      <h1>{TITLES[0]}</h1>
+      <WelcomeText />
+    </section>
+    <footer className="sw-onboarding-footer">
+      <button type="button" className="sw-onboarding-primary" onClick={onClose}>Вернуться</button>
+    </footer>
+  </main>;
+}
+
+function WelcomeText() {
+  return <>
+    <p>Ваше пространство для понимания самочувствия в пери- и менопаузе.<br />Отмечайте изменения, собирайте свою историю и наблюдайте личную динамику.</p>
+    <p className="sw-onboarding-note">SanaWell AI — wellness-сервис. Не ставит диагнозы и не заменяет врача.</p>
+  </>;
+}
+
 /**
  * Authenticated per-step persistence. consentOnly shows just the consent page (re-consent of a
  * completed account to the current documents) and calls onCheckin once it is confirmed.
@@ -257,10 +279,7 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false }: {
     <section className="sw-onboarding-content">
       {step === 0 && <img className="sw-onboarding-logo" src={logo} alt="SanaWell AI" />}
       <h1 id="onboarding-title" tabIndex={-1} ref={heading}>{TITLES[step]}</h1>
-      {step === 0 && <>
-        <p>Ваше пространство для понимания самочувствия в пери- и менопаузе.<br />Отмечайте изменения, собирайте свою историю и наблюдайте личную динамику.</p>
-        <p className="sw-onboarding-note">SanaWell AI — wellness-сервис. Не ставит диагнозы и не заменяет врача.</p>
-      </>}
+      {step === 0 && <WelcomeText />}
       {step === 1 && <>
         <p>SanaWell AI сохраняет информацию, которую вы сами добавляете о своём самочувствии, чтобы показывать вашу историю и личную динамику.</p>
         <div className="sw-onboarding-option sw-onboarding-consent">

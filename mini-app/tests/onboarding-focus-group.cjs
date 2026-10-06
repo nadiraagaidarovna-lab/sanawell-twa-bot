@@ -85,6 +85,29 @@ async function normalRead(route, path, checkin = null) {
       await page.getByText('Добро пожаловать в SanaWell AI').waitFor();
       console.log('PASS gate: start failure shows retry, then the server-chosen flow'); await page.close();
     }
+    {
+      // «Показать приветствие снова»: the new welcome page, view only, no writes.
+      const page = await telegramPage(browser); const writes = [];
+      const record = recordFor({ onboardingWelcomeSeen: true, onboardingAnketaCompleted: true, consents: { current: true } });
+      await page.route('**/api/**', route => {
+        const request = route.request(), path = new URL(request.url()).pathname;
+        if (request.method() !== 'GET') { writes.push(path); return route.fulfill({ json: { ok: true } }); }
+        return path === '/api/me' ? route.fulfill({ json: record }) : normalRead(route, path);
+      });
+      await page.goto(base); await page.locator('.sw-greeting').waitFor();
+      await page.getByRole('button', { name: 'Профиль', exact: true }).click();
+      await page.getByRole('button', { name: 'Показать приветствие снова', exact: true }).click();
+      await page.getByRole('heading', { name: 'Добро пожаловать в SanaWell AI' }).waitFor();
+      assert.equal(await page.locator('.sw-onboarding-progress').count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Начать мою историю 360°' }).count(), 0);
+      await page.getByRole('button', { name: 'Вернуться', exact: true }).click();
+      await page.getByRole('button', { name: 'Показать приветствие снова', exact: true }).waitFor();
+      await page.getByRole('button', { name: 'Показать приветствие снова', exact: true }).click();
+      await page.getByRole('heading', { name: 'Добро пожаловать в SanaWell AI' }).waitFor();
+      await back(page); await page.getByRole('button', { name: 'Показать приветствие снова', exact: true }).waitFor();
+      assert.deepEqual(writes, []);
+      console.log('PASS welcome again: new welcome, read-only, returns to the cabinet'); await page.close();
+    }
     for (const scenario of ['success','first-fails','second-fails','lost-first','lost-second','status-fails','invalid-status','unconfirmed','duplicate','partial-existing','progress']) {
       const page = await telegramPage(browser);
       const record = recordFor({ onboardingWelcomeSeen: scenario === 'partial-existing' });
