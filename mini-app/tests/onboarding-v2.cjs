@@ -33,6 +33,8 @@ function fakeServer(page, record, writes, fail = {}) {
       case '/api/anketa/priority':
         if (body.priority !== 'unsure' && !record.focusTopics.includes(body.priority)) return route.fulfill({ status: 409, json: {} });
         record.focusPriority = body.priority; return route.fulfill({ json: { ok: true } });
+      case '/api/anketa/progress':
+        record.onboardingReachedStep = Math.max(record.onboardingReachedStep || 0, body.step); return route.fulfill({ json: { ok: true } });
       case '/api/onboarding-welcome-seen': record.onboardingWelcomeSeen = true; return route.fulfill({ json: { ok: true } });
       case '/api/anketa/complete': record.onboardingAnketaCompleted = true; return route.fulfill({ json: { ok: true } });
       default: throw new Error(`Unexpected write ${path}`);
@@ -89,10 +91,12 @@ const heading = (page, name) => page.getByRole('heading', { name, exact: true })
       await page.getByRole('button', { name: 'Всё верно', exact: true }).click();
       await heading(page, 'Ваша стартовая карта').waitFor();
       const map = await page.locator('.sw-onboarding-content').innerText();
-      assert(map.includes('Пока не выбран') && map.includes('Сон и восстановление') && map.includes('На главной — «Сон»'));
+      assert(map.includes('Пока не выбран') && map.includes('Сон и восстановление') && map.includes('Техники для засыпания'));
+      assert(!map.includes('На главной'), 'no technical labels');
       assert(!/диагноз|лечение|у вас перименопауза|у вас менопауза/i.test(map));
       assert.equal(await page.getByText('Эмоциональное здоровье').count(), 0); // removed topic not on the map
-      assert.equal(writes.filter(w => w.path.startsWith('/api/anketa/') && w.path !== '/api/anketa/complete').length, 6);
+      assert.equal(writes.filter(w => w.path.startsWith('/api/anketa/') && !['/api/anketa/complete', '/api/anketa/progress'].includes(w.path)).length, 6);
+      assert.equal(record.onboardingReachedStep, 7);
       assert(!writes.some(w => ['/api/anketa/age', '/api/anketa/cycle-situation', '/api/anketa/mht-status'].includes(w.path)));
       await page.getByRole('button', { name: 'Отметить самочувствие →', exact: true }).click();
       await page.locator('.checkin-fields').waitFor(); // existing check-in, unchanged
@@ -108,7 +112,10 @@ const heading = (page, name) => page.getByRole('heading', { name, exact: true })
       ['no consent', {}, WELCOME],
       ['consent only', { consents: { current: true } }, 'Как к вам обращаться?'],
       ['topics saved', { consents: { current: true }, focusTopics: ['sleep'] }, 'Что для вас главное сейчас?'],
-      ['all saved', { consents: { current: true }, focusTopics: ['sleep'], focusPriority: 'sleep', displayName: 'Тест' }, 'Проверьте ответы'],
+      ['name skipped, reached topics', { consents: { current: true }, onboardingReachedStep: 4 }, 'Что для вас сейчас важно?'],
+      ['all saved', { consents: { current: true }, focusTopics: ['sleep'], focusPriority: 'sleep', displayName: 'Тест', onboardingReachedStep: 6 }, 'Проверьте ответы'],
+      ['reached the map', { consents: { current: true }, focusTopics: ['sleep'], focusPriority: 'sleep', onboardingReachedStep: 7 }, 'Ваша стартовая карта'],
+      ['reached map but priority missing', { consents: { current: true }, focusTopics: ['sleep'], onboardingReachedStep: 7 }, 'Что для вас главное сейчас?'],
     ]) {
       const page = await browser.newPage({ viewport: { width: 390, height: 844 } }); const writes = [];
       await fakeServer(page, fresh(over), writes);
@@ -125,6 +132,7 @@ const heading = (page, name) => page.getByRole('heading', { name, exact: true })
       await page.getByLabel('Имя').fill(''); await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
       await heading(page, 'Что для вас сейчас важно?').waitFor();
       assert(!writes.some(w => w.path === '/api/anketa/name'), 'blank optional name is not written');
+      assert.equal(record.onboardingReachedStep, 4, 'skipping the name is remembered');
       await page.locator('input[value=nutrition]').check();
       await page.getByRole('button', { name: 'Продолжить', exact: true }).click();
       await page.getByRole('alert').waitFor();

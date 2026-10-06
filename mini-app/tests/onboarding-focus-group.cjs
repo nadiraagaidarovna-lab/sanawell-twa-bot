@@ -175,6 +175,7 @@ async function normalRead(route, path, checkin = null) {
           checkin = { sleepScore: data.sleep, moodScore: data.mood, memoryScore: data.memory, energyScore: null, hot_flashes: null, comment: null, canCorrect: true };
           return route.fulfill({ json: { ok: true, checkin } });
         }
+        if (path === '/api/anketa/progress') return route.fulfill({ json: { ok: true } });
         assert([welcomePath, completePath].includes(path), `Unrelated write: ${path}`);
         assert.equal(request.postData(), null); writes.push(path);
         if (scenario === 'duplicate' && path === welcomePath) { started(); await barrier; }

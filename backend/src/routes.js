@@ -118,6 +118,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         mhtStatus: user?.mht_status ?? null,
         focusTopics: user?.focus_topics ?? [],
         focusPriority: user?.focus_priority ?? null,
+        onboardingReachedStep: user?.onboarding_reached_step ?? null,
         email: user ? user.email : null,
         phone: user ? user.phone : null,
         accountDeleted: !!(user && user.deleted_at),
@@ -334,6 +335,19 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
       throw error;
     }
     if (!saved) return res.status(409).json({ error: 'priority_not_in_topics', reason: 'priority_not_in_topics' });
+    res.json({ ok: true });
+  }));
+
+  // Furthest onboarding screen reached, for resuming after close (only increases).
+  router.post('/anketa/progress', requireAuth, consentGate, asyncHandler(async (req, res) => {
+    const { step } = req.body || {};
+    if (!Number.isInteger(step) || step < 3 || step > 7) return res.status(400).json({ error: 'invalid_step' });
+    try {
+      await db.setOnboardingReachedStep(req.telegramId, step);
+    } catch (error) {
+      if (error.code === '42703') return res.status(503).json({ error: 'onboarding_storage_unavailable' });
+      throw error;
+    }
     res.json({ ok: true });
   }));
 

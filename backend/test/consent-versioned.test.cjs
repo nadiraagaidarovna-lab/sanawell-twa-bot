@@ -39,6 +39,7 @@ async function setup(env = {}) {
   await pg.exec(profileSourceMigration);
   await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations/20261007_app_events.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations/20261008_onboarding_topics.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations/20261009_onboarding_reached_step.sql'), 'utf8'));
   const saved = {};
   for (const [key, value] of Object.entries(env)) { saved[key] = process.env[key]; process.env[key] = value; }
   const { buildRouter } = load('routes.js', { './db': db });
@@ -80,6 +81,7 @@ const WRITES = [
   ['/partners/1/click', {}], // stores telegram_id
   ['/anketa/topics', { topics: ['sleep'] }],
   ['/anketa/priority', { priority: 'unsure' }],
+  ['/anketa/progress', { step: 4 }],
 ];
 
 test('version comes from the single legal-documents source', () => {
@@ -315,5 +317,21 @@ test('topics and main priority: validation, consistency, editing, old answers ke
     const user = await db.getUser('101');
     assert.equal(user.age, 47); assert.equal(user.cycle_situation, 'unsure'); // earlier answers are not removed
     await assert.rejects(pg.query("UPDATE users SET focus_topics = ARRAY['diagnosis'] WHERE telegram_id='101'"));
+  } finally { await close(); }
+});
+
+test('reached step: validated, only increases, gated', async () => {
+  const { request, close } = await setup();
+  try {
+    assert.equal((await request('/anketa/progress', { step: 4 })).status, 403);
+    assert.equal((await request('/consents', GRANT)).status, 200);
+    for (const bad of [{}, { step: 2 }, { step: 8 }, { step: '4' }, { step: 4.5 }]) {
+      assert.equal((await request('/anketa/progress', bad)).status, 400, JSON.stringify(bad));
+    }
+    assert.equal((await request('/me')).body.onboardingReachedStep, null);
+    assert.equal((await request('/anketa/progress', { step: 4 })).status, 200);
+    assert.equal((await request('/anketa/progress', { step: 6 })).status, 200);
+    assert.equal((await request('/anketa/progress', { step: 3 })).status, 200); // going back does not lower it
+    assert.equal((await request('/me')).body.onboardingReachedStep, 6);
   } finally { await close(); }
 });

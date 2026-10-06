@@ -383,6 +383,16 @@ async function setFocusPriority(telegramId, priority) {
   return rowCount === 1;
 }
 
+// Furthest onboarding screen reached (3..7); never moves back (migration 20261009).
+async function setOnboardingReachedStep(telegramId, step) {
+  if (!Number.isInteger(step) || step < 3 || step > 7) throw new Error('invalid_reached_step');
+  await pool.query(
+    `UPDATE users SET onboarding_reached_step = GREATEST(COALESCE(onboarding_reached_step, 0), $1)
+     WHERE telegram_id = $2`,
+    [step, String(telegramId)]
+  );
+}
+
 // Свободный текст, не enum: один из вариантов шага 5 ("Своё") — открытое поле, см. коммент
 // у схемы в initSchema().
 // Известные ключи предустановленных вариантов цели (STEP5_GOAL в mini-app/src/content/anketa.ts,
@@ -755,6 +765,7 @@ module.exports = {
   PRIORITY_UNSURE,
   setFocusTopics,
   setFocusPriority,
+  setOnboardingReachedStep,
   setCycleSituation,
   setMhtStatus,
   initSchema,

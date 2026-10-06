@@ -20,6 +20,7 @@ interface MeOnboarding {
   displayName: string | null;
   focusTopics?: string[];
   focusPriority?: string | null;
+  onboardingReachedStep?: number | null;
 }
 
 /** Full-page message in the onboarding style (paused onboarding, failed start). */
@@ -85,6 +86,8 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
   // What the server has confirmed; the review and the map show only this.
   const [saved, setSaved] = useState<{ name: string | null; topics: string[]; priority: string }>({ name: null, topics: [], priority: '' });
   const [returnToReview, setReturnToReview] = useState(false);
+  // Furthest screen (1-based) confirmed by the server; reopening resumes there.
+  const reached = useRef(0);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const [error, setError] = useState('');
@@ -104,11 +107,14 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
         setName(me.displayName ?? getTelegramFirstName() ?? '');
         setTopics(savedTopics);
         setPriority(savedPriority);
+        reached.current = typeof me.onboardingReachedStep === 'number' ? me.onboardingReachedStep : 0;
         if (full) {
-          // Resume from what is already saved; a completed step is never asked again blindly.
+          // Resume at the furthest screen reached, but never past a missing required answer.
+          const furthest = reached.current - 1; // 0-based
           setStep(me.consents?.current !== true ? STEP.welcome
-            : savedTopics.length === 0 ? STEP.name
-            : !savedPriority ? STEP.priority : STEP.review);
+            : savedTopics.length === 0 ? (furthest >= STEP.topics ? STEP.topics : STEP.name)
+            : !savedPriority ? STEP.priority
+            : furthest >= STEP.map ? STEP.map : STEP.review);
         }
         setLoadStatus('ready');
       })
@@ -140,6 +146,15 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
     if (inFlight.current) return;
     setReturnToReview(false);
     go(Math.max(editTopics ? STEP.topics : 0, step - 1));
+  };
+
+  // Saves the furthest screen reached (1-based, 3..7) before moving there; full flow only.
+  const saveReached = async (toIndex: number) => {
+    const screen = toIndex + 1;
+    if (!full || screen < 3 || screen <= reached.current) return;
+    const result = await apiFetch<{ ok: boolean }>('/anketa/progress', { method: 'POST', body: JSON.stringify({ step: screen }) });
+    if (result.ok !== true) throw new Error('Progress save not confirmed');
+    reached.current = screen;
   };
 
   // Runs one save with a lock against double taps; errors are shown, never hidden.
@@ -178,9 +193,11 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
           if (result.ok !== true) throw new Error('Name save not confirmed');
           setSaved((current) => ({ ...current, name: trimmed }));
         }
+        const to = returnToReview ? STEP.review : STEP.topics;
+        await saveReached(to); // also when the optional name was skipped
         stepDone(index);
         setReturnToReview(false);
-        go(returnToReview ? STEP.review : STEP.topics);
+        go(to);
       }, 'Не удалось сохранить. Попробуйте ещё раз.');
       return;
     }
@@ -196,10 +213,12 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
           setSaved((current) => ({ ...current, topics: result.focusTopics, priority: savedPriority }));
           setPriority(savedPriority);
         }
-        stepDone(index);
         const priorityStillValid = !!savedPriority;
-        if (full && returnToReview && priorityStillValid) { setReturnToReview(false); go(STEP.review); }
-        else go(STEP.priority);
+        const to = full && returnToReview && priorityStillValid ? STEP.review : STEP.priority;
+        await saveReached(to);
+        stepDone(index);
+        if (to === STEP.review) setReturnToReview(false);
+        go(to);
       }, 'Не удалось сохранить. Попробуйте ещё раз.');
       return;
     }
@@ -210,6 +229,7 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
           if (result.ok !== true) throw new Error('Priority save not confirmed');
           setSaved((current) => ({ ...current, priority }));
         }
+        if (!editTopics) await saveReached(STEP.review);
         stepDone(index);
         setReturnToReview(false);
         if (editTopics) await onCheckin();
@@ -217,7 +237,11 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
       }, 'Не удалось сохранить. Попробуйте ещё раз.');
       return;
     }
-    if (step === STEP.review) { stepDone(index); go(STEP.map); return; }
+    if (step === STEP.review) {
+      await run(index, async () => { await saveReached(STEP.map); stepDone(index); go(STEP.map); },
+        'Не удалось сохранить. Попробуйте ещё раз.');
+      return;
+    }
     if (step === STEP.map) {
       await run(index, async () => { await onCheckin(); }, 'Не удалось завершить сохранение. Попробуйте ещё раз.');
     }
@@ -352,7 +376,7 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
           <span className="sw-onboarding-review-label">{TEXT.mapTopics}</span>
           <ul className="sw-onboarding-map-list">
             {TOPICS.filter((t) => saved.topics.includes(t.key)).map((t) => <li key={t.key}>
-              <span>{t.title}</span><span className="sw-onboarding-option-hint">{TEXT.mapWhere(t.homeCard)}</span>
+              <span>{t.title}</span><span className="sw-onboarding-option-hint">{t.found}</span>
             </li>)}
           </ul>
         </div>
