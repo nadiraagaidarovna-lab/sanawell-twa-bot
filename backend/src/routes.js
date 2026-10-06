@@ -639,6 +639,9 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   router.post(
     '/partners/:id/click',
     requireAuth,
+    // The click row stores telegram_id, so it is linked to the woman and needs consent too.
+    // The partner link itself opens regardless (PartnersScreen ignores this request's result).
+    consentGate,
     asyncHandler(async (req, res) => {
       const partnerId = Number(req.params.id);
       if (!Number.isInteger(partnerId)) {

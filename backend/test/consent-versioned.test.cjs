@@ -73,6 +73,7 @@ const WRITES = [
   ['/anketa/symptoms', { checklist: { sleep: ['insomnia'] } }],
   ['/anketa/complete', {}],
   ['/checkin', { sleep: 5, mood: 5, memory: 5 }],
+  ['/partners/1/click', {}], // stores telegram_id
 ];
 
 test('version comes from the single legal-documents source', () => {
@@ -90,6 +91,8 @@ test('every write of personal or wellbeing data is rejected without consent and 
     }
     assert.equal((await pg.query('SELECT count(*)::int n FROM users')).rows[0].n, 0);
     assert.equal((await pg.query('SELECT count(*)::int n FROM daily_checkins')).rows[0].n, 0);
+    assert.equal((await pg.query('SELECT count(*)::int n FROM partner_clicks')).rows[0].n, 0);
+    assert.equal((await request('/partners')).status, 200); // the directory itself stays readable
     // Non-data endpoints keep working without consent.
     assert.equal((await request('/me')).status, 200);
     assert.equal((await request('/language', { language: 'ru' })).status, 200);
