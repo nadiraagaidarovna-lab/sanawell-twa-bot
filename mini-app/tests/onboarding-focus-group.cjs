@@ -39,6 +39,7 @@ async function normalRead(route, path, checkin = null) {
   if (path === '/api/checkin') return route.fulfill({ json: { checkin } });
   if (path === '/api/checkin/history') return route.fulfill({ json: { history: [] } });
   if (path === '/api/checkin/weekly-report') return route.fulfill({ json: { recommendations: [], doctorNudge: { show: false, text: null } } });
+  if (path === '/api/today-action') return route.fulfill({ json: { needsTopic: true, priority: null, options: [] } });
   if (path === '/api/checkin/summary') return route.fulfill({ json: { daysCount: checkin ? 1 : 0, lastCheckinDate: null } });
   throw new Error(`Unexpected request: ${path}`);
 }

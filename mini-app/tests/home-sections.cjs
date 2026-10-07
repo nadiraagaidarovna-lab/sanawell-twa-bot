@@ -24,6 +24,7 @@ const ALL = Object.values(protocols).flat().map((p) => p.title);
       if (p === '/api/checkin') return route.fulfill({ json: { checkin: null } });
       if (p === '/api/checkin/history') return route.fulfill({ json: { history: [] } });
       if (p === '/api/checkin/weekly-report') return route.fulfill({ json: { recommendations: [], doctorNudge: { show: false, text: null } } });
+      if (p === '/api/today-action') return route.fulfill({ json: { needsTopic: true, priority: null, options: [] } });
       if (p === '/api/checkin/summary') return route.fulfill({ json: { daysCount: 0, lastCheckinDate: null } });
       throw new Error(`Unexpected request ${p}`);
     });
@@ -69,11 +70,10 @@ const ALL = Object.values(protocols).flat().map((p) => p.title);
     // The target is one-shot: entering «Мой план поддержки» another way shows all techniques.
     await home(); await card('Питание и обмен веществ').click();
     await page.getByRole('heading', { name: 'Питание', exact: true }).waitFor();
-    await home();
-    await page.locator('.sw-action-btn').click(); // «Сегодня для вас» -> Открыть
-    await page.getByRole('heading', { name: 'Все техники самопомощи', exact: true }).waitFor();
+    await home(); await card('Сон и восстановление').click(); // a new card replaces the previous target
+    await page.getByRole('heading', { name: 'Сон', exact: true }).waitFor();
     await page.locator('.protocol-title').first().waitFor();
-    assert.equal((await shownTitles()).length, ALL.length);
+    assert.deepEqual(await shownTitles(), titles('sleep'));
     console.log('PASS target is one-shot: other entry shows all techniques');
     assert.equal(await page.locator('.sw-writes-paused').count(), 0, 'no banner in normal mode');
     writesPaused = true; await home();

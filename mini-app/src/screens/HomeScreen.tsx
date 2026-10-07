@@ -9,7 +9,8 @@ import CheckinScreen, { type CheckinRecord } from './CheckinScreen';
 import StateCard from '../components/home/StateCard';
 import type { SparklineEntry } from '../components/home/MiniSparkline';
 import InsightCard from '../components/home/InsightCard';
-import TodayActionCard from '../components/home/TodayActionCard';
+import TodayActionPanel from '../components/TodayActionPanel';
+import { useOpenTodayMaterial } from '../lib/useOpenTodayMaterial';
 import WellnessGrid from '../components/home/WellnessGrid';
 
 interface TodayCheckin {
@@ -37,6 +38,7 @@ function timeGreeting(hour: number): string {
 
 export default function HomeScreen({ onCheckinSaved }: { onCheckinSaved: (checkin: CheckinRecord) => void }) {
   const { push } = useNavigation();
+  const openTodayMaterial = useOpenTodayMaterial();
   const [refreshKey, setRefreshKey] = useState(0);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [checkinFormActive, setCheckinFormActive] = useState(false);
@@ -99,7 +101,6 @@ export default function HomeScreen({ onCheckinSaved }: { onCheckinSaved: (checki
   const greeting = `${timeGreeting(new Date().getHours())}${name ? `, ${name}` : ''}!`;
   const observation = report?.recommendations.find((rec) =>
     rec.reason.includes(REAL_OBSERVATION_MARKER))?.reason ?? null;
-  const action = report?.recommendations[0]?.protocol ?? null;
 
   return (
     <main className="sw-home">
@@ -125,8 +126,8 @@ export default function HomeScreen({ onCheckinSaved }: { onCheckinSaved: (checki
       <InsightCard loading={reportLoading} observationText={observation}
         onSeeMore={() => push('progress')} />
 
-      <TodayActionCard loading={reportLoading} title={action?.title ?? 'Все техники самопомощи'}
-        duration={action?.duration} onStart={() => push('techniques')} />
+      {/* Today's single step by the main priority from onboarding (not by today's scores). */}
+      <TodayActionPanel key={refreshKey} onOpen={openTodayMaterial} />
 
       <section className="sw-section" aria-label="Сферы заботы о себе">
         <WellnessGrid onNavigate={(screen) => push(screen)} />

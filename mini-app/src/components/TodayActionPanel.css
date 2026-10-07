@@ -1,0 +1,15 @@
+/* «Сегодня для вас» and «Попробовала / Пока нет»: existing SanaWell tokens only. */
+.sw-today { margin: 16px 0; padding: 18px; border: 1px solid var(--sw-v3-border); border-radius: 20px; background: var(--sw-v3-surface); color: var(--sw-v3-ink); }
+.sw-today-heading { margin: 0 0 8px; font-size: 20px; }
+.sw-today-topic { margin: 0 0 4px; font-size: 15px; color: var(--sw-v3-ink-soft); }
+.sw-today-title { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+.sw-today-note { margin: 6px 0; font-size: 16px; color: var(--sw-v3-ink-soft); }
+.sw-today-reason { margin: 8px 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--sw-primary-soft); font-size: 15px; }
+.sw-today-done { margin: 8px 0; font-size: 16px; font-weight: 600; color: var(--sw-primary); }
+.sw-today-open { width: 100%; min-height: 48px; margin-top: 8px; border: 0; border-radius: 14px; background: var(--sw-primary); color: var(--sw-primary-text); font: inherit; font-size: 17px; font-weight: 600; cursor: pointer; }
+.sw-today-secondary { width: 100%; min-height: 48px; margin-top: 8px; border: 1px solid var(--sw-primary); border-radius: 14px; background: var(--sw-v3-surface); color: var(--sw-primary); font: inherit; font-size: 17px; cursor: pointer; }
+.sw-today-link { display: block; min-height: 44px; margin-top: 6px; padding: 0; border: 0; background: transparent; color: var(--sw-primary); font: inherit; font-size: 16px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.sw-today-topics { display: grid; gap: 8px; margin-top: 8px; }
+.sw-today-topics button { min-height: 44px; padding: 10px 14px; border: 1px solid var(--sw-v3-ink-soft); border-radius: 14px; background: var(--sw-v3-surface); color: var(--sw-v3-ink); font: inherit; font-size: 16px; text-align: left; cursor: pointer; }
+.sw-today-feedback-buttons { display: grid; gap: 4px; }
+.sw-today button:disabled { opacity: .6; cursor: default; }

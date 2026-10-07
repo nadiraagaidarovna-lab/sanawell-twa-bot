@@ -6,6 +6,7 @@ const { detectRiskTrigger, getSafetyResources } = require('./safety');
 const { buildWeeklyReport } = require('./weeklyReport');
 const consent = require('./consent');
 const analytics = require('./analytics');
+const dailyAction = require('./dailyAction');
 
 // Which onboarding an unfinished account gets. v2_all — the new flow for everyone;
 // v2_allowlist — the new flow for ONBOARDING_TESTER_IDS only; paused — no onboarding questions
@@ -352,6 +353,52 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
     }
     if (!saved) return res.status(409).json({ error: 'priority_not_in_topics', reason: 'priority_not_in_topics' });
     res.json({ ok: true });
+  }));
+
+  // Today's single next step: by the main priority from onboarding or a topic chosen for today.
+  // Check-in scores are not used. The mark «Попробовала / Пока нет» is only what she sets herself.
+  const todayActionFor = async (telegramId) => {
+    const user = await db.getUser(telegramId);
+    let row = null;
+    try {
+      row = await db.getDailyAction(telegramId, db.almatyDateString(new Date()));
+    } catch (error) {
+      if (error.code !== consent.UNDEFINED_TABLE) throw error;
+    }
+    return dailyAction.buildTodayAction(user?.focus_priority ?? null, row);
+  };
+
+  router.get('/today-action', requireAuth, asyncHandler(async (req, res) => {
+    res.json(await todayActionFor(req.telegramId));
+  }));
+
+  router.post('/today-action/topic', requireAuth, consentGate, asyncHandler(async (req, res) => {
+    const { topic } = req.body || {};
+    if (!dailyAction.ACTIONABLE_TOPICS.includes(topic)) return res.status(400).json({ error: 'invalid_topic' });
+    const user = await db.getUser(req.telegramId);
+    try {
+      // Picking the main priority again simply returns to it (no «today» override).
+      await db.setDailyTopic(req.telegramId, db.almatyDateString(new Date()), topic === user?.focus_priority ? null : topic);
+    } catch (error) {
+      if (error.code === consent.UNDEFINED_TABLE) return res.status(503).json({ error: 'daily_actions_unavailable' });
+      throw error;
+    }
+    res.json(await todayActionFor(req.telegramId));
+  }));
+
+  router.post('/today-action/status', requireAuth, consentGate, asyncHandler(async (req, res) => {
+    const { materialId, status } = req.body || {};
+    if (!['tried', 'not_yet'].includes(status) || typeof materialId !== 'string') return res.status(400).json({ error: 'invalid_payload' });
+    const current = await todayActionFor(req.telegramId);
+    // Only today's material can be marked; a stale screen gets 409 and reloads.
+    if (current.needsTopic || current.material.id !== materialId) return res.status(409).json({ error: 'not_today_material', reason: 'not_today_material' });
+    try {
+      await db.setDailyStatus(req.telegramId, db.almatyDateString(new Date()), materialId, status);
+    } catch (error) {
+      if (error.code === consent.UNDEFINED_TABLE) return res.status(503).json({ error: 'daily_actions_unavailable' });
+      throw error;
+    }
+    res.json(await todayActionFor(req.telegramId));
   }));
 
   // Furthest onboarding screen reached, for resuming after close (only increases).

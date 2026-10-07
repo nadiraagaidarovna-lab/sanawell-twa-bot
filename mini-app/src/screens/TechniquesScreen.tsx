@@ -18,6 +18,9 @@ import { useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import BottomNav from '../components/BottomNav';
 import { clearTechniquesTarget, peekTechniquesTarget, type TechniquesTarget } from '../lib/techniquesTarget';
+import { clearPendingActionMaterial, peekPendingActionMaterial, type TodayMaterial } from '../lib/todayAction';
+import { useNavigation } from '../lib/useNavigation';
+import ActionFeedback from '../components/ActionFeedback';
 
 interface Protocol {
   id: string;
@@ -44,7 +47,10 @@ const MODULE_ORDER = ['sleep', 'mood', 'cognitive', 'nutrition', 'strength'];
 export default function TechniquesScreen() {
   // Opened from a Home card: show only that module; «Все техники самопомощи» expands the rest.
   const [focus, setFocus] = useState<TechniquesTarget | null>(() => peekTechniquesTarget());
-  useEffect(() => { clearTechniquesTarget(); }, []);
+  // Opened from today's action: «Попробовала / Пока нет» under the one technique.
+  const [actionMaterial] = useState<TodayMaterial | null>(() => peekPendingActionMaterial());
+  const { reset } = useNavigation();
+  useEffect(() => { clearTechniquesTarget(); clearPendingActionMaterial(); }, []);
   const [view, setView] = useState<ViewState>('loading');
   const [protocols, setProtocols] = useState<ProtocolsByModule>({});
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +97,7 @@ export default function TechniquesScreen() {
           <section key={moduleName}>
             {!focus && <p className="module-heading">{MODULE_LABELS[moduleName]}</p>}
             <div className="protocol-list">
-              {protocols[moduleName].map((protocol) => (
+              {protocols[moduleName].filter((protocol) => !focus?.protocolId || protocol.id === focus.protocolId).map((protocol) => (
                 <div className="protocol-card" key={protocol.id}>
                   <div className="protocol-card-header">
                     <span className="protocol-title">{protocol.title}</span>
@@ -108,6 +114,10 @@ export default function TechniquesScreen() {
             </div>
           </section>
         ))}
+
+      {view === 'loaded' && actionMaterial && focus?.protocolId === actionMaterial.id && (
+        <ActionFeedback material={actionMaterial} onFinish={() => reset('home')} />
+      )}
 
       {view === 'loaded' && focus && (
         <button type="button" className="cabinet-btn" style={{ marginTop: 16 }} onClick={() => setFocus(null)}>

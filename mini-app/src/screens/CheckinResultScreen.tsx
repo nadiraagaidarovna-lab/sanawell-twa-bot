@@ -3,12 +3,15 @@ import logo from '../assets/sanawell-logo.png';
 import { HOT_FLASHES_LABELS } from '../content/checkin';
 import { apiFetch } from '../lib/api';
 import type { CheckinRecord } from './CheckinScreen';
+import TodayActionPanel from '../components/TodayActionPanel';
+import type { TodayMaterial } from '../lib/todayAction';
 import './CheckinResultScreen.css';
 
 interface Props {
   checkin: CheckinRecord;
   onDone: () => void;
   onProgress: () => void;
+  onOpenMaterial: (material: TodayMaterial) => void;
 }
 
 // Each dimension has its own equal 80-degree scale, separated by a 10-degree gap.
@@ -20,7 +23,7 @@ function arc(start: number, sweep: number): string {
   return `M ${point(start)} A 148 148 0 0 1 ${point(start + sweep)}`;
 }
 
-export default function CheckinResultScreen({ checkin, onDone, onProgress }: Props) {
+export default function CheckinResultScreen({ checkin, onDone, onProgress, onOpenMaterial }: Props) {
   const heading = useRef<HTMLHeadingElement>(null);
   const [summary, setSummary] = useState<{ daysCount: number; lastCheckinDate: string | null } | null>(null);
   const [submittedAt] = useState(() => new Date());
@@ -83,6 +86,10 @@ export default function CheckinResultScreen({ checkin, onDone, onProgress }: Pro
         Возвращайтесь завтра и снова отметьте самочувствие.<br />
         Чем больше ваших отметок, тем понятнее становится ваша личная динамика.
       </p>
+
+      {/* One concrete next step by the main priority from onboarding — the same as on Home.
+          Today's scores above do not change it. */}
+      <TodayActionPanel onOpen={onOpenMaterial} />
 
       <footer className="sw-result-actions">
         <button type="button" onClick={onDone}>Готово</button>

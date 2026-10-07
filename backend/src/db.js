@@ -383,6 +383,35 @@ async function setFocusPriority(telegramId, priority) {
   return rowCount === 1;
 }
 
+// Today's action (migration 20261010_daily_actions.sql): one row per woman per Almaty day.
+async function getDailyAction(telegramId, day) {
+  const { rows } = await pool.query(
+    'SELECT today_topic, material_id, status FROM daily_actions WHERE telegram_id = $1 AND action_date = $2',
+    [String(telegramId), day]
+  );
+  return rows[0] || null;
+}
+
+// Topic for today only; the main priority (users.focus_priority) is not touched. Choosing another
+// topic clears today's mark, which belonged to the previous material.
+async function setDailyTopic(telegramId, day, topic) {
+  await pool.query(
+    `INSERT INTO daily_actions (telegram_id, action_date, today_topic) VALUES ($1, $2, $3)
+     ON CONFLICT (telegram_id, action_date) DO UPDATE SET today_topic = EXCLUDED.today_topic,
+       material_id = NULL, status = NULL, updated_at = now()`,
+    [String(telegramId), day, topic]
+  );
+}
+
+async function setDailyStatus(telegramId, day, materialId, status) {
+  await pool.query(
+    `INSERT INTO daily_actions (telegram_id, action_date, material_id, status) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (telegram_id, action_date) DO UPDATE SET material_id = EXCLUDED.material_id,
+       status = EXCLUDED.status, updated_at = now()`,
+    [String(telegramId), day, materialId, status]
+  );
+}
+
 // Furthest onboarding screen reached (3..7); never moves back (migration 20261009).
 async function setOnboardingReachedStep(telegramId, step) {
   if (!Number.isInteger(step) || step < 3 || step > 7) throw new Error('invalid_reached_step');
@@ -766,6 +795,9 @@ module.exports = {
   setFocusTopics,
   setFocusPriority,
   setOnboardingReachedStep,
+  getDailyAction,
+  setDailyTopic,
+  setDailyStatus,
   setCycleSituation,
   setMhtStatus,
   initSchema,

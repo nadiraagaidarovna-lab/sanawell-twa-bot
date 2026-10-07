@@ -13,6 +13,8 @@ import BottomNav from '../components/BottomNav';
 import { getGuideCards } from '../content/guide';
 import { consumeGuideTarget } from '../lib/guideTarget';
 import { setBodyTarget } from '../lib/bodyTarget';
+import { clearPendingActionMaterial, peekPendingActionMaterial, type TodayMaterial } from '../lib/todayAction';
+import ActionFeedback from '../components/ActionFeedback';
 
 interface MeResponse {
   menopausePath: 'natural' | 'surgical' | 'oncological' | null;
@@ -24,9 +26,12 @@ type ViewState =
   | { state: 'error'; message: string };
 
 export default function GuideScreen() {
-  const { push } = useNavigation();
+  const { push, reset } = useNavigation();
   const [view, setView] = useState<ViewState>({ state: 'loading' });
   const [index, setIndex] = useState(0);
+  // Opened from today's action: «Попробовала / Пока нет» under the cards.
+  const [actionMaterial] = useState<TodayMaterial | null>(() => peekPendingActionMaterial());
+  useEffect(() => { clearPendingActionMaterial(); }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +95,10 @@ export default function GuideScreen() {
       <h1>Гид</h1>
 
       <SwipeCards cards={cards} index={index} onIndexChange={setIndex} footers={footers} />
+
+      {actionMaterial?.kind === 'guide' && (
+        <ActionFeedback material={actionMaterial} onFinish={() => reset('home')} />
+      )}
 
       <BottomNav active="guide" />
     </main>

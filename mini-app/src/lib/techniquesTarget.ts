@@ -3,8 +3,10 @@
 // при открытии и показывает только этот модуль. Одноразовый, как guideTarget.ts: обычный вход
 // (например, «Сегодня для вас») по-прежнему открывает все техники.
 export interface TechniquesTarget {
-  module: 'nutrition' | 'sleep' | 'mood';
+  module: 'nutrition' | 'sleep' | 'mood' | 'strength';
   title: string;
+  // Today's action: show only this one technique.
+  protocolId?: string;
 }
 
 let pending: TechniquesTarget | null = null;

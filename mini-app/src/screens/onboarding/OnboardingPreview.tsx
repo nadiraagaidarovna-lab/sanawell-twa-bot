@@ -16,7 +16,7 @@ export default function OnboardingPreview() {
       {checkin && ' Далее — существующий Check-in; его сохранение требует действующей авторизации и API.'}
     </aside>
     {progress ? <><button type="button" onClick={() => setProgress(false)}>← Вернуться к результату</button><ProgressScreen /></>
-      : result ? <CheckinResultScreen checkin={result} onDone={() => { setResult(null); setCheckin(false); }} onProgress={() => setProgress(true)} />
+      : result ? <CheckinResultScreen checkin={result} onDone={() => { setResult(null); setCheckin(false); }} onProgress={() => setProgress(true)} onOpenMaterial={() => {}} />
       : checkin ? <CheckinScreen onSaved={setResult} />
         : <OnboardingFlow onCheckin={() => setCheckin(true)} />}
   </NavigationProvider>;

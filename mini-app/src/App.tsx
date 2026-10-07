@@ -26,6 +26,7 @@ import ConsentScreen from './screens/ConsentScreen';
 import HomeScreen from './screens/HomeScreen';
 import CheckinScreen, { type CheckinRecord } from './screens/CheckinScreen';
 import CheckinResultScreen from './screens/CheckinResultScreen';
+import { useOpenTodayMaterial } from './lib/useOpenTodayMaterial';
 import ProgressScreen from './screens/ProgressScreen';
 import TechniquesScreen from './screens/TechniquesScreen';
 import PartnersScreen from './screens/PartnersScreen';
@@ -168,6 +169,7 @@ function Screens({
   consentNextScreen: ScreenId;
 }) {
   const { screen, canGoBack, back, push, reset } = useNavigation();
+  const openTodayMaterial = useOpenTodayMaterial();
   // Один язык на всю анкету, не по экрану — переключение на любом шаге должно быть видно
   // на всех остальных, если вернуться назад, та же логика, что уже была бы у одного
   // многошагового экрана, просто анкета физически разбита на отдельные ScreenId. Экран
@@ -185,7 +187,8 @@ function Screens({
 
   if (checkinResult) {
     return <CheckinResultScreen checkin={checkinResult} onDone={closeCheckinResult}
-      onProgress={() => { setCheckinResult(null); push('progress'); }} />;
+      onProgress={() => { setCheckinResult(null); push('progress'); }}
+      onOpenMaterial={(material) => { setCheckinResult(null); if (screen !== 'home') push('home'); openTodayMaterial(material); }} />;
   }
 
   if (isAnketaStep(screen)) {

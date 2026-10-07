@@ -366,3 +366,34 @@ test('APP_WRITE_MODE=read_only stops writes for every account; reading and right
     assert.equal((await normal.request('/checkin', { sleep: 5, mood: 5, memory: 5 })).status, 200);
   } finally { await normal.close(); }
 });
+
+test('today action: by main priority only, topic for today, own mark; opening is not done', async () => {
+  const { pg, db, request, close } = await setup();
+  try {
+    await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations/20261010_daily_actions.sql'), 'utf8'));
+    let a = (await request('/today-action')).body;
+    assert.equal(a.needsTopic, true); // no account yet
+    assert.equal((await request('/today-action/topic', { topic: 'sleep' })).status, 403); // consent required
+    assert.equal((await request('/consents', GRANT)).status, 200);
+    assert.equal((await request('/anketa/topics', { topics: ['sleep', 'environment'] })).status, 200);
+    assert.equal((await request('/anketa/priority', { priority: 'sleep' })).status, 200);
+    a = (await request('/today-action')).body;
+    assert.deepEqual([a.topic, a.source, a.reason, a.material.kind, a.status], ['sleep', 'priority', 'Вы выбрали эту тему при знакомстве', 'technique', null]);
+    // A very low check-in today does not change the route.
+    assert.equal((await request('/checkin', { sleep: 1, mood: 1, memory: 1 })).status, 200);
+    assert.equal((await request('/today-action')).body.material.id, a.material.id);
+    for (const bad of [{}, { topic: 'environment' }, { topic: 'x' }]) assert.equal((await request('/today-action/topic', bad)).status, 400);
+    let t = (await request('/today-action/topic', { topic: 'emotions' })).body;
+    assert.deepEqual([t.topic, t.source, t.reason], ['emotions', 'today', 'Вы выбрали эту тему на сегодня']);
+    assert.equal((await db.getUser('101')).focus_priority, 'sleep'); // main priority kept
+    assert.equal((await request('/today-action/status', { materialId: a.material.id, status: 'tried' })).status, 409); // not today's material
+    assert.equal((await request('/today-action/status', { materialId: t.material.id, status: 'done' })).status, 400);
+    t = (await request('/today-action/status', { materialId: t.material.id, status: 'not_yet' })).body;
+    assert.equal(t.status, 'not_yet');
+    t = (await request('/today-action/topic', { topic: 'sleep' })).body; // back to the priority
+    assert.deepEqual([t.source, t.status], ['priority', null]); // the previous mark belonged to another material
+    t = (await request('/today-action/status', { materialId: t.material.id, status: 'tried' })).body;
+    assert.equal(t.status, 'tried');
+    assert.equal((await pg.query('SELECT count(*)::int n FROM daily_actions')).rows[0].n, 1); // one row per day
+  } finally { await close(); }
+});
