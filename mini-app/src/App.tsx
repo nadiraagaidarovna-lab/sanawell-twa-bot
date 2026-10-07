@@ -52,6 +52,7 @@ interface MeGateResponse {
   onboardingWelcomeSeen: boolean;
   onboardingAnketaCompleted: boolean;
   language: string | null;
+  writesPaused?: boolean;
 }
 
 // Consent to the CURRENT document version, confirmed by the server (consent_events). Old
@@ -265,6 +266,7 @@ type GateState =
       savedLanguage: string | null;
       welcomeNextScreen: ScreenId;
       consentNextScreen: ScreenId;
+      writesPaused: boolean;
     };
 
 function App() {
@@ -289,6 +291,7 @@ function App() {
           savedLanguage: me.language,
           welcomeNextScreen,
           consentNextScreen,
+          writesPaused: me.writesPaused === true,
         });
       })
       .catch(() => {
@@ -314,6 +317,9 @@ function App() {
 
   return (
     <NavigationProvider initialScreen={gate.initialScreen}>
+      {gate.writesPaused && <p className="sw-writes-paused" role="status">
+        Сохранение новых данных временно приостановлено. Просматривать сохранённое можно как обычно.
+      </p>}
       <Screens
         savedLanguage={gate.savedLanguage}
         welcomeNextScreen={gate.welcomeNextScreen}

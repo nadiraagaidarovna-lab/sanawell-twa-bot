@@ -14,11 +14,12 @@ const ALL = Object.values(protocols).flat().map((p) => p.title);
   try {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } }); const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
+    let writesPaused = false;
     await page.route('**/api/**', (route) => {
       const p = new URL(route.request().url()).pathname;
       if (p === '/api/events') return route.fulfill({ json: { ok: true } });
       if (p === '/api/me') return route.fulfill({ json: { onboardingVersion: 'v2', onboardingWelcomeSeen: true, onboardingAnketaCompleted: true,
-        consents: { current: true }, displayName: 'Тест', menopausePath: null, symptomChecklist: null } });
+        consents: { current: true }, displayName: 'Тест', menopausePath: null, symptomChecklist: null, writesPaused } });
       if (p === '/api/protocols') return route.fulfill({ json: { protocols } });
       if (p === '/api/checkin') return route.fulfill({ json: { checkin: null } });
       if (p === '/api/checkin/history') return route.fulfill({ json: { history: [] } });
@@ -74,6 +75,12 @@ const ALL = Object.values(protocols).flat().map((p) => p.title);
     await page.locator('.protocol-title').first().waitFor();
     assert.equal((await shownTitles()).length, ALL.length);
     console.log('PASS target is one-shot: other entry shows all techniques');
+    assert.equal(await page.locator('.sw-writes-paused').count(), 0, 'no banner in normal mode');
+    writesPaused = true; await home();
+    await page.getByText('Сохранение новых данных временно приостановлено. Просматривать сохранённое можно как обычно.').waitFor();
+    writesPaused = false; await home();
+    assert.equal(await page.locator('.sw-writes-paused').count(), 0, 'banner gone after return to normal');
+    console.log('PASS read-only banner shown only while writes are paused');
     assert.deepEqual(errors, []);
     console.log('PASS no errors');
   } finally { await browser.close(); }

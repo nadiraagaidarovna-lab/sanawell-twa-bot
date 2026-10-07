@@ -9,7 +9,7 @@ const filename = path.resolve(__dirname, '../src/bot.js');
 const nativeRequire = createRequire(filename);
 const express = nativeRequire('express');
 
-function loadBot(webhookFailures = 0) {
+function loadBot(webhookFailures = 0, dbStub = {}) {
   const created = [];
   class FakeBot {
     constructor(token, options) { this.options = options; this.textHandlers = []; this.sent = []; this.webhook = null; created.push(this); }
@@ -28,7 +28,7 @@ function loadBot(webhookFailures = 0) {
   }
   const module = { exports: {} };
   vm.runInThisContext('(function(require,module,exports){' + fs.readFileSync(filename, 'utf8') + '\n})', { filename })(
-    name => name === 'node-telegram-bot-api' ? FakeBot : name === './db' ? {} : name === 'dotenv' ? { config() {} } : nativeRequire(name),
+    name => name === 'node-telegram-bot-api' ? FakeBot : name === './db' ? dbStub : name === 'dotenv' ? { config() {} } : nativeRequire(name),
     module, module.exports);
   return { ...module.exports, created };
 }
@@ -82,4 +82,23 @@ test('webhook mode retries setWebHook after 409 during a zero-downtime deploy', 
   for (let i = 0; i < 50 && !bot.webhook; i++) await new Promise(r => setTimeout(r, 10));
   assert.equal(bot.webhookCalls, 3);
   assert.equal(bot.webhook.url, 'https://staging.example/telegram/webhook');
+});
+
+test('APP_WRITE_MODE=read_only pauses both reminder schedules; normal mode resumes them', async () => {
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Almaty', hour: 'numeric', hour12: false }).format(new Date()));
+  const run = async (mode) => {
+    const calls = { daily: 0, habits: 0 };
+    const db = { getUsersDueForReminder: async () => { calls.daily++; return []; }, getUsersDueForHabitsReminder: async () => { calls.habits++; return []; } };
+    const saved = process.env.APP_WRITE_MODE;
+    if (mode) process.env.APP_WRITE_MODE = mode; else delete process.env.APP_WRITE_MODE;
+    try {
+      const { startBot } = loadBot(0, db);
+      startBot({ botToken: 'test-token', webAppUrl: 'https://x.example', botMode: 'webhook', app: express(), reminderHour: hour, habitsReminderHour: hour, reminderCheckIntervalMs: 10 });
+      await new Promise(r => setTimeout(r, 80));
+    } finally { if (saved === undefined) delete process.env.APP_WRITE_MODE; else process.env.APP_WRITE_MODE = saved; }
+    return calls;
+  };
+  assert.deepEqual(await run('read_only'), { daily: 0, habits: 0 });
+  const normal = await run(undefined);
+  assert(normal.daily > 0 && normal.habits > 0, JSON.stringify(normal));
 });

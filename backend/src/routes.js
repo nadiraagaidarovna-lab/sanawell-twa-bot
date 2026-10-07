@@ -39,8 +39,23 @@ function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 }
 
+// Emergency stop for writes of ALL accounts (APP_WRITE_MODE=read_only), without returning to older
+// code: reading, documents and the rights below stay available. Restart needed to change it.
+const WRITES_ALWAYS_ALLOWED = ['/consents/withdraw', '/account/delete-request', '/account/cancel-deletion'];
+const REMINDER_SWITCHES = ['/reminder-opt-in', '/habits-reminder-opt-in'];
+function writeAllowedWhilePaused(req) {
+  if (WRITES_ALWAYS_ALLOWED.includes(req.path)) return true;
+  // Turning a reminder off is always possible; turning it on is a new write.
+  return REMINDER_SWITCHES.includes(req.path) && !(req.body && req.body.optIn);
+}
+
 function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   const router = express.Router();
+  const writesPaused = process.env.APP_WRITE_MODE === 'read_only';
+  router.use((req, res, next) => {
+    if (!writesPaused || req.method === 'GET' || writeAllowedWhilePaused(req)) return next();
+    return res.status(503).json({ error: 'writes_paused', reason: 'writes_paused' });
+  });
   // Explicit, server-only focus-group allowlist. Empty/unset means nobody is opted in.
   const onboardingTesters = new Set((process.env.ONBOARDING_TESTER_IDS || '')
     .split(',').map(id => id.trim()).filter(id => /^[1-9]\d*$/.test(id)));
@@ -87,6 +102,7 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
         onboarded,
         newOnboardingTester: onboardingTesters.has(String(req.telegramId)),
         onboardingVersion: onboardingVersionFor(req.telegramId),
+        writesPaused,
         consents,
         language: user ? user.language : null,
         reminderOptIn: !!(user && user.reminder_opt_in),

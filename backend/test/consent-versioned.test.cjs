@@ -335,3 +335,34 @@ test('reached step: validated, only increases, gated', async () => {
     assert.equal((await request('/me')).body.onboardingReachedStep, 6);
   } finally { await close(); }
 });
+
+test('APP_WRITE_MODE=read_only stops writes for every account; reading and rights stay; normal mode returns', async () => {
+  const ro = await setup({ APP_WRITE_MODE: 'read_only' });
+  try {
+    await ro.pg.query("INSERT INTO users (telegram_id, onboarding_anketa_completed, reminder_opt_in, habits_reminder_opt_in) VALUES ('101', true, 1, 1)");
+    for (const d of REQUIRED_DOCUMENTS) await ro.pg.query("INSERT INTO consent_events (telegram_id, document, document_version, action, source) VALUES ('101', $1, $2, 'granted', 'onboarding_v2')", [d, CURRENT_VERSION]);
+    const counts = async () => (await ro.pg.query('SELECT (SELECT count(*) FROM daily_checkins)::int d, (SELECT count(*) FROM app_events)::int e, (SELECT count(*) FROM partner_clicks)::int p')).rows[0];
+    const before = await counts();
+    for (const [route, body] of [...WRITES, ['/consents', GRANT], ['/events', { events: [{ name: 'section_open', section: 'home' }] }],
+      ['/language', { language: 'kk' }], ['/onboarding-welcome-seen', {}], ['/reminder-opt-in', { optIn: true }], ['/habits-reminder-opt-in', { optIn: true }]]) {
+      const r = await ro.request(route, body);
+      assert.equal(r.status, 503, route); assert.equal(r.body.error, 'writes_paused', route);
+    }
+    assert.deepEqual(await counts(), before);
+    const me = await ro.request('/me');
+    assert.equal(me.status, 200); assert.equal(me.body.writesPaused, true); assert.equal(me.body.consents.current, true);
+    for (const route of ['/checkin', '/checkin/history', '/checkin/summary', '/protocols', '/partners']) assert.equal((await ro.request(route)).status, 200, route);
+    assert.equal((await ro.request('/reminder-opt-in', { optIn: false })).status, 200);
+    assert.equal((await ro.request('/habits-reminder-opt-in', { optIn: false })).status, 200);
+    assert.equal((await ro.request('/account/delete-request', {})).status, 200);
+    assert.equal((await ro.request('/account/cancel-deletion', {})).status, 200);
+    assert.equal((await ro.request('/consents/withdraw', {})).status, 200);
+    assert.equal((await ro.request('/me')).body.consents.current, false);
+  } finally { await ro.close(); }
+  const normal = await setup();
+  try {
+    assert.equal((await normal.request('/me')).body.writesPaused, false);
+    assert.equal((await normal.request('/consents', GRANT)).status, 200);
+    assert.equal((await normal.request('/checkin', { sleep: 5, mood: 5, memory: 5 })).status, 200);
+  } finally { await normal.close(); }
+});

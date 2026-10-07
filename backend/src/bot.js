@@ -183,8 +183,11 @@ function startBot({
     }
   });
 
+  // APP_WRITE_MODE=read_only also pauses reminders (they invite new entries).
+  const remindersPaused = () => process.env.APP_WRITE_MODE === 'read_only';
+
   async function sendDailyReminders() {
-    if (currentAlmatyHour() !== reminderHour) return;
+    if (remindersPaused() || currentAlmatyHour() !== reminderHour) return;
 
     const today = todayAlmaty();
     const dueUsers = await db.getUsersDueForReminder(today);
@@ -215,7 +218,7 @@ function startBot({
   // но отдельный час (habitsReminderHour) и интервал в днях, не "раз в день" — намеренно
   // независимый канал, отключение одного не трогает другой (см. DISABLE_HANDLERS выше).
   async function sendHabitsReminders() {
-    if (currentAlmatyHour() !== habitsReminderHour) return;
+    if (remindersPaused() || currentAlmatyHour() !== habitsReminderHour) return;
 
     const today = todayAlmaty();
     const dueUsers = await db.getUsersDueForHabitsReminder(habitsReminderIntervalDays);
