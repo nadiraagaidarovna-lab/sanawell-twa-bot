@@ -11,6 +11,7 @@
 import type { ReactNode } from 'react';
 import WellnessAreaCard from './WellnessAreaCard';
 import type { ScreenId } from '../../lib/navigationContext';
+import { setTechniquesTarget, type TechniquesTarget } from '../../lib/techniquesTarget';
 
 function IconApple() {
   return (
@@ -67,6 +68,8 @@ interface WellnessArea {
   title: string;
   description: string;
   screen: ScreenId;
+  // For «Мой план поддержки»: open only this module, so other modules never look like this section.
+  module?: TechniquesTarget['module'];
   icon: ReactNode;
 }
 
@@ -76,6 +79,7 @@ const AREAS: WellnessArea[] = [
     title: 'Питание',
     description: 'Питание и обмен веществ',
     screen: 'techniques',
+    module: 'nutrition',
     icon: <IconApple />,
   },
   {
@@ -87,12 +91,13 @@ const AREAS: WellnessArea[] = [
   {
     title: 'Сон',
     description: 'Сон и восстановление',
-    screen: 'progress',
+    screen: 'techniques', // sleep techniques; the sleep chart stays in «Динамика»
+    module: 'sleep',
     icon: <IconMoon />,
   },
   {
     title: 'Менопауза 360°',
-    description: 'Менопауза 360° — Гормональная и интимная гигиена',
+    description: 'Менопауза 360°', // no intimate-hygiene materials yet, so not promised
     screen: 'guide',
     icon: <IconHeart />,
   },
@@ -100,12 +105,13 @@ const AREAS: WellnessArea[] = [
     title: 'Эмоции',
     description: 'Эмоциональное здоровье',
     screen: 'techniques',
+    module: 'mood',
     icon: <IconWave />,
   },
   {
     title: 'Окружение',
     description: 'Окружение и смысл',
-    screen: 'guide',
+    screen: 'environment', // honest placeholder until materials exist
     icon: <IconLeaf />,
   },
 ];
@@ -123,7 +129,10 @@ export default function WellnessGrid({ onNavigate }: WellnessGridProps) {
           icon={area.icon}
           title={area.title}
           description={area.description}
-          onClick={() => onNavigate(area.screen)}
+          onClick={() => {
+            if (area.module) setTechniquesTarget({ module: area.module, title: area.title });
+            onNavigate(area.screen);
+          }}
         />
       ))}
     </div>

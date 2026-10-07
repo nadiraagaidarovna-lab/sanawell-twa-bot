@@ -35,6 +35,7 @@ import AiAssistantScreen from './screens/AiAssistantScreen';
 import CabinetScreen from './screens/CabinetScreen';
 import ProfileEditScreen from './screens/ProfileEditScreen';
 import TariffScreen from './screens/TariffScreen';
+import EnvironmentScreen from './screens/EnvironmentScreen';
 import AnketaNameScreen from './screens/anketa/AnketaNameScreen';
 import AnketaAgeScreen from './screens/anketa/AnketaAgeScreen';
 import AnketaStageScreen from './screens/anketa/AnketaStageScreen';
@@ -82,7 +83,7 @@ const ANKETA_STEPS: ScreenId[] = [
 // Sections counted by analytics (open + active time). Onboarding and legacy questionnaire
 // screens are not sections: onboarding steps have their own events.
 const ANALYTICS_SECTIONS: ScreenId[] = ['home', 'checkin', 'progress', 'techniques', 'partners', 'guide',
-  'body', 'ai-assistant', 'cabinet', 'profile-edit', 'tariff', 'welcome-again', 'reconsent', 'topics-edit'];
+  'body', 'ai-assistant', 'cabinet', 'profile-edit', 'tariff', 'welcome-again', 'reconsent', 'topics-edit', 'environment'];
 
 function isAnketaStep(screen: ScreenId): boolean {
   return (ANKETA_STEPS as string[]).includes(screen);
@@ -233,6 +234,8 @@ function Screens({
       return <CabinetScreen />;
     case 'profile-edit':
       return <ProfileEditScreen />;
+    case 'environment':
+      return <EnvironmentScreen />;
     case 'tariff':
       return <TariffScreen />;
     case 'home':

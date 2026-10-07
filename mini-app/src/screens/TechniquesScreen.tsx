@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../lib/api';
 import BottomNav from '../components/BottomNav';
+import { clearTechniquesTarget, peekTechniquesTarget, type TechniquesTarget } from '../lib/techniquesTarget';
 
 interface Protocol {
   id: string;
@@ -41,6 +42,9 @@ const MODULE_LABELS: Record<string, string> = {
 const MODULE_ORDER = ['sleep', 'mood', 'cognitive', 'nutrition', 'strength'];
 
 export default function TechniquesScreen() {
+  // Opened from a Home card: show only that module; «Все техники самопомощи» expands the rest.
+  const [focus, setFocus] = useState<TechniquesTarget | null>(() => peekTechniquesTarget());
+  useEffect(() => { clearTechniquesTarget(); }, []);
   const [view, setView] = useState<ViewState>('loading');
   const [protocols, setProtocols] = useState<ProtocolsByModule>({});
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +72,7 @@ export default function TechniquesScreen() {
   return (
     <main className="screen v2-screen v2-accent-c2">
       <p className="eyebrow">SanaWell</p>
-      <h1>Все техники самопомощи</h1>
+      <h1>{focus ? focus.title : 'Все техники самопомощи'}</h1>
 
       {view === 'loading' && (
         <p className="body-text" style={{ color: 'var(--v2-ink-soft)' }}>
@@ -83,9 +87,9 @@ export default function TechniquesScreen() {
       )}
 
       {view === 'loaded' &&
-        MODULE_ORDER.filter((moduleName) => protocols[moduleName]?.length).map((moduleName) => (
+        (focus ? [focus.module] : MODULE_ORDER).filter((moduleName) => protocols[moduleName]?.length).map((moduleName) => (
           <section key={moduleName}>
-            <p className="module-heading">{MODULE_LABELS[moduleName]}</p>
+            {!focus && <p className="module-heading">{MODULE_LABELS[moduleName]}</p>}
             <div className="protocol-list">
               {protocols[moduleName].map((protocol) => (
                 <div className="protocol-card" key={protocol.id}>
@@ -104,6 +108,12 @@ export default function TechniquesScreen() {
             </div>
           </section>
         ))}
+
+      {view === 'loaded' && focus && (
+        <button type="button" className="cabinet-btn" style={{ marginTop: 16 }} onClick={() => setFocus(null)}>
+          Все техники самопомощи
+        </button>
+      )}
 
       <BottomNav active="techniques" />
     </main>

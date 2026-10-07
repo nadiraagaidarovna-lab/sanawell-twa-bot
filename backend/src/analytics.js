@@ -7,7 +7,7 @@ const crypto = require('crypto');
 
 const SECTIONS = [
   'home', 'checkin', 'checkin-result', 'progress', 'techniques', 'partners', 'guide', 'body',
-  'ai-assistant', 'cabinet', 'profile-edit', 'tariff', 'welcome-again', 'reconsent', 'topics-edit',
+  'ai-assistant', 'cabinet', 'profile-edit', 'tariff', 'welcome-again', 'reconsent', 'topics-edit', 'environment',
 ];
 const DOCS = ['terms', 'privacy', 'dataConsent'];
 const ERROR_KINDS = ['network', 'server', 'consent', 'validation'];

@@ -11,6 +11,7 @@ export type ScreenId =
   | 'reconsent'
   | 'welcome-again'
   | 'topics-edit'
+  | 'environment'
   | 'onboarding-paused'
   | 'welcome'
   | 'consent'
