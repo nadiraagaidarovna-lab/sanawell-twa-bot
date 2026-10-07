@@ -10,7 +10,8 @@ const base = process.env.TODAY_TEST_BASE_URL || 'http://127.0.0.1:5175/checkin/'
 function fake(page, record, log) {
   return page.route('**/api/**', (route) => {
     const req = route.request(), p = new URL(req.url()).pathname;
-    const now = () => buildTodayAction(record.focusPriority, record.row);
+    record.marks = record.marks || {};
+    const now = () => buildTodayAction(record.focusPriority, record.row, record.marks);
     if (p === '/api/events') return route.fulfill({ json: { ok: true } });
     if (req.method() === 'POST') log.push(p);
     switch (p) {
@@ -22,14 +23,14 @@ function fake(page, record, log) {
       case '/api/today-action/topic': {
         const { topic } = req.postDataJSON();
         assert(ACTIONABLE_TOPICS.includes(topic));
-        record.row = { today_topic: topic === record.focusPriority ? null : topic, material_id: null, status: null };
+        record.row = { today_topic: topic === record.focusPriority ? null : topic }; // marks are kept
         return route.fulfill({ json: now() });
       }
       case '/api/today-action/status': {
         const { materialId, status } = req.postDataJSON();
         const a = now();
         if (a.needsTopic || a.material.id !== materialId) return route.fulfill({ status: 409, json: {} });
-        record.row = { ...(record.row || { today_topic: null }), material_id: materialId, status };
+        record.marks[materialId] = status;
         return route.fulfill({ json: now() });
       }
       case '/api/protocols': return route.fulfill({ json: { protocols: getAllProtocols() } });
@@ -70,11 +71,11 @@ const panel = (page) => page.locator('.sw-today').first();
       await panel(page).getByRole('button', { name: 'Открыть', exact: true }).click();
       await page.getByRole('heading', { name: expected.title, exact: true }).waitFor();
       assert.deepEqual(await page.locator('.protocol-title').allInnerTexts(), [expected.title]);
-      assert.equal(record.row, null, 'opening the material records nothing');
+      assert.deepEqual(record.marks, {}, 'opening the material records nothing');
       assert(!log.includes('/api/today-action/status'));
       await page.getByRole('button', { name: 'Попробовала', exact: true }).click();
       await page.getByText('Отлично. На сегодня всё 🤍 Возвращайтесь завтра — отметьте самочувствие.').waitFor();
-      assert.equal(record.row.status, 'tried');
+      assert.equal(record.marks[expected.id], 'tried');
       await page.getByRole('button', { name: 'На главную', exact: true }).click();
       await page.locator('.sw-greeting').waitFor();
       await panel(page).getByText('Отмечено: попробовала. На сегодня всё 🤍 Возвращайтесь завтра.').waitFor();
@@ -100,13 +101,19 @@ const panel = (page) => page.locator('.sw-today').first();
       assert.equal(record.focusPriority, 'sleep', 'main priority unchanged');
       const mood = buildTodayAction('sleep', { today_topic: 'emotions' }).material;
       await panel(page).getByText(mood.title, { exact: true }).waitFor();
-      assert.equal(record.row.status, null, 'new topic starts unmarked');
+      assert.equal(record.marks[mood.id], undefined, 'new topic starts unmarked');
       assert.equal(await panel(page).getByText('Отмечено', { exact: false }).count(), 0, 'old mark not shown on the new material');
       await panel(page).getByRole('button', { name: 'Открыть', exact: true }).click();
       await page.getByRole('heading', { name: mood.title, exact: true }).waitFor();
       await page.getByRole('button', { name: 'Пока нет', exact: true }).click();
       await page.getByText('Хорошо, можно вернуться к этому позже. На сегодня всё 🤍').waitFor();
-      assert.equal(record.row.status, 'not_yet');
+      assert.equal(record.marks[mood.id], 'not_yet');
+      // Back to the main topic the same day: its «Попробовала» is still there.
+      await page.getByRole('button', { name: 'На главную', exact: true }).click();
+      await panel(page).getByRole('button', { name: 'Сегодня хочу другую тему', exact: true }).click();
+      await panel(page).getByRole('button', { name: 'Сон и восстановление', exact: true }).click();
+      await panel(page).getByText('Отмечено: попробовала', { exact: false }).waitFor();
+      assert.equal(record.marks[buildTodayAction('sleep', null).material.id], 'tried');
       console.log('PASS «Сегодня хочу другую тему»: today only, priority kept; «Пока нет» recorded');
       await page.close();
     }

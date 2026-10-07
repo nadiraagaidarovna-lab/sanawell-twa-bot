@@ -367,10 +367,10 @@ test('APP_WRITE_MODE=read_only stops writes for every account; reading and right
   } finally { await normal.close(); }
 });
 
-test('today action: by main priority only, topic for today, own mark; opening is not done', async () => {
+test('today action: by main priority only, topic for today, marks per material; opening is not done', async () => {
   const { pg, db, request, close } = await setup();
   try {
-    await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations/20261010_daily_actions.sql'), 'utf8'));
+    for (const m of ['20261010_daily_actions.sql', '20261011_daily_action_marks.sql']) await pg.exec(fs.readFileSync(path.resolve(__dirname, '../migrations', m), 'utf8'));
     let a = (await request('/today-action')).body;
     assert.equal(a.needsTopic, true); // no account yet
     assert.equal((await request('/today-action/topic', { topic: 'sleep' })).status, 403); // consent required
@@ -383,7 +383,10 @@ test('today action: by main priority only, topic for today, own mark; opening is
     assert.equal((await request('/checkin', { sleep: 1, mood: 1, memory: 1 })).status, 200);
     assert.equal((await request('/today-action')).body.material.id, a.material.id);
     for (const bad of [{}, { topic: 'environment' }, { topic: 'x' }]) assert.equal((await request('/today-action/topic', bad)).status, 400);
+    // «Попробовала» on the priority material first.
+    assert.equal((await request('/today-action/status', { materialId: a.material.id, status: 'tried' })).body.status, 'tried');
     let t = (await request('/today-action/topic', { topic: 'emotions' })).body;
+    assert.equal(t.status, null); // the new material opens unmarked
     assert.deepEqual([t.topic, t.source, t.reason], ['emotions', 'today', 'Вы выбрали эту тему на сегодня']);
     assert.equal((await db.getUser('101')).focus_priority, 'sleep'); // main priority kept
     assert.equal((await request('/today-action/status', { materialId: a.material.id, status: 'tried' })).status, 409); // not today's material
@@ -391,9 +394,10 @@ test('today action: by main priority only, topic for today, own mark; opening is
     t = (await request('/today-action/status', { materialId: t.material.id, status: 'not_yet' })).body;
     assert.equal(t.status, 'not_yet');
     t = (await request('/today-action/topic', { topic: 'sleep' })).body; // back to the priority
-    assert.deepEqual([t.source, t.status], ['priority', null]); // the previous mark belonged to another material
-    t = (await request('/today-action/status', { materialId: t.material.id, status: 'tried' })).body;
-    assert.equal(t.status, 'tried');
-    assert.equal((await pg.query('SELECT count(*)::int n FROM daily_actions')).rows[0].n, 1); // one row per day
+    assert.deepEqual([t.source, t.material.id, t.status], ['priority', a.material.id, 'tried']); // its mark is kept
+    t = (await request('/today-action/topic', { topic: 'emotions' })).body;
+    assert.equal(t.status, 'not_yet'); // and so is the other one
+    assert.equal((await pg.query('SELECT count(*)::int n FROM daily_actions')).rows[0].n, 1); // one topic row per day
+    assert.deepEqual((await pg.query('SELECT status FROM daily_action_marks ORDER BY status')).rows.map((r) => r.status), ['not_yet', 'tried']);
   } finally { await close(); }
 });

@@ -31,8 +31,9 @@ function materialFor(topic, now) {
   return { kind: 'technique', module: spec.module, id: protocol.id, title: protocol.title, duration: protocol.duration };
 }
 
-// priority — users.focus_priority; row — today's daily_actions row or null.
-function buildTodayAction(priority, row, now = new Date()) {
+// priority — users.focus_priority; row — today's daily_actions row (topic for today) or null;
+// marks — today's marks by material id ({ [materialId]: 'tried' | 'not_yet' }).
+function buildTodayAction(priority, row, marks = {}, now = new Date()) {
   const todayTopic = row && ACTIONABLE_TOPICS.includes(row.today_topic) ? row.today_topic : null;
   const priorityTopic = ACTIONABLE_TOPICS.includes(priority) ? priority : null;
   const topic = todayTopic || priorityTopic;
@@ -42,8 +43,8 @@ function buildTodayAction(priority, row, now = new Date()) {
     return { needsTopic: true, priority: priority ?? null, options };
   }
   const material = materialFor(topic, now);
-  // A mark counts only for the material it was given for.
-  const status = row && row.material_id === material.id ? row.status : null;
+  // A mark belongs to its own material: a new material starts unmarked, an earlier one keeps its mark.
+  const status = (marks && marks[material.id]) || null;
   return {
     needsTopic: false,
     topic,

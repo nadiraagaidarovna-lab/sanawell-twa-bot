@@ -386,28 +386,37 @@ async function setFocusPriority(telegramId, priority) {
 // Today's action (migration 20261010_daily_actions.sql): one row per woman per Almaty day.
 async function getDailyAction(telegramId, day) {
   const { rows } = await pool.query(
-    'SELECT today_topic, material_id, status FROM daily_actions WHERE telegram_id = $1 AND action_date = $2',
+    'SELECT today_topic FROM daily_actions WHERE telegram_id = $1 AND action_date = $2',
     [String(telegramId), day]
   );
   return rows[0] || null;
 }
 
-// Topic for today only; the main priority (users.focus_priority) is not touched. Choosing another
-// topic clears today's mark, which belonged to the previous material.
+// Topic for today only; the main priority (users.focus_priority) is not touched. Marks live in
+// daily_action_marks and are never cleared by choosing a topic.
 async function setDailyTopic(telegramId, day, topic) {
   await pool.query(
     `INSERT INTO daily_actions (telegram_id, action_date, today_topic) VALUES ($1, $2, $3)
      ON CONFLICT (telegram_id, action_date) DO UPDATE SET today_topic = EXCLUDED.today_topic,
-       material_id = NULL, status = NULL, updated_at = now()`,
+       updated_at = now()`,
     [String(telegramId), day, topic]
   );
 }
 
+// Today's marks keyed by material id (migration 20261011).
+async function getDailyMarks(telegramId, day) {
+  const { rows } = await pool.query(
+    'SELECT material_id, status FROM daily_action_marks WHERE telegram_id = $1 AND action_date = $2',
+    [String(telegramId), day]
+  );
+  return Object.fromEntries(rows.map((r) => [r.material_id, r.status]));
+}
+
+// One mark per day per material; marking again replaces only that material's mark.
 async function setDailyStatus(telegramId, day, materialId, status) {
   await pool.query(
-    `INSERT INTO daily_actions (telegram_id, action_date, material_id, status) VALUES ($1, $2, $3, $4)
-     ON CONFLICT (telegram_id, action_date) DO UPDATE SET material_id = EXCLUDED.material_id,
-       status = EXCLUDED.status, updated_at = now()`,
+    `INSERT INTO daily_action_marks (telegram_id, action_date, material_id, status) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (telegram_id, action_date, material_id) DO UPDATE SET status = EXCLUDED.status, updated_at = now()`,
     [String(telegramId), day, materialId, status]
   );
 }
@@ -796,6 +805,7 @@ module.exports = {
   setFocusPriority,
   setOnboardingReachedStep,
   getDailyAction,
+  getDailyMarks,
   setDailyTopic,
   setDailyStatus,
   setCycleSituation,

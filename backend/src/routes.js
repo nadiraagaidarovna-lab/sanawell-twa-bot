@@ -359,13 +359,16 @@ function buildRouter({ requireAuth, safetyProtocolEnabled = false }) {
   // Check-in scores are not used. The mark «Попробовала / Пока нет» is only what she sets herself.
   const todayActionFor = async (telegramId) => {
     const user = await db.getUser(telegramId);
+    const day = db.almatyDateString(new Date());
     let row = null;
+    let marks = {};
     try {
-      row = await db.getDailyAction(telegramId, db.almatyDateString(new Date()));
+      row = await db.getDailyAction(telegramId, day);
+      marks = await db.getDailyMarks(telegramId, day);
     } catch (error) {
       if (error.code !== consent.UNDEFINED_TABLE) throw error;
     }
-    return dailyAction.buildTodayAction(user?.focus_priority ?? null, row);
+    return dailyAction.buildTodayAction(user?.focus_priority ?? null, row, marks);
   };
 
   router.get('/today-action', requireAuth, asyncHandler(async (req, res) => {
