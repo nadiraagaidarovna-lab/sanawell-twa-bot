@@ -71,6 +71,8 @@ const heading = (page, name) => page.getByRole('heading', { name, exact: true })
       await heading(page, 'Что для вас сейчас важно?').waitFor();
       assert(await next.isDisabled(), 'at least one topic required');
       assert.equal(await page.getByRole('checkbox').count(), 6);
+      const topicsText = await page.locator('.sw-onboarding-options').innerText();
+      assert(topicsText.includes('Менопауза 360°') && !/интимн/i.test(topicsText), 'short topic name');
       await page.locator('input[value=emotions]').check(); await page.locator('input[value=sleep]').check(); await page.locator('input[value=environment]').check();
       await next.click();
       await heading(page, 'Что для вас главное сейчас?').waitFor();
