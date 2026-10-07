@@ -1,4 +1,5 @@
 require('dotenv').config();
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { requireTelegramAuth } = require('./telegramAuth');
@@ -16,7 +17,27 @@ app.use(express.json());
 // консолидации, CLAUDE.md 4.3.1). Собранный index.html ссылается на /checkin/assets/...
 // (см. mini-app/vite.config.ts: base: '/checkin/'), поэтому монтируем именно на этом
 // префиксе — иначе ассеты не найдутся.
-app.use('/checkin', express.static(path.join(__dirname, '..', '..', 'mini-app', 'dist')));
+const MINI_APP_DIST = path.join(__dirname, '..', '..', 'mini-app', 'dist');
+// Build id = hashed entry script named in dist/index.html. Telegram can restore a minimised
+// Mini App without reloading it, so an open app may still run a build from before the last
+// deploy; the app compares its own entry script with this and reloads (lib/buildCheck.ts).
+const BUILD_ID = (() => {
+  try {
+    const m = fs.readFileSync(path.join(MINI_APP_DIST, 'index.html'), 'utf8').match(/assets\/(index-[\w-]+\.js)/);
+    return m ? m[1] : null;
+  } catch { return null; }
+})();
+app.get('/checkin/build.json', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ build: BUILD_ID });
+});
+app.use('/checkin', express.static(MINI_APP_DIST, {
+  setHeaders(res, file) {
+    // index.html must never be reused from cache; hashed assets never change.
+    if (file.endsWith('.html')) res.set('Cache-Control', 'no-store');
+    else if (file.includes(`${path.sep}assets${path.sep}`)) res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  },
+}));
 
 // Старый vanilla-трекер (frontend/) упразднён — редирект на случай уже открытых вкладок
 // или закэшированных в клиенте Telegram ссылок на корень, чтобы женщина не видела
