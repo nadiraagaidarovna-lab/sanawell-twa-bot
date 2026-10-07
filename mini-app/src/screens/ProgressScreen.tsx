@@ -12,7 +12,8 @@
 // GuideScreen.tsx) даёт (1) ссылку «И почитайте в Гиде: Мозг» под техникой на просевшую
 // Голову и (2) подпись над графиком из отмеченных в анкете Сон/Настроение/Голова. При
 // ошибке /me экран ведёт себя как раньше — без подписи и без ссылки.
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import ProtocolWhy from '../components/ProtocolWhy';
 import { apiFetch, ApiError } from '../lib/api';
 import { useNavigation } from '../lib/useNavigation';
 import WeeklyChart, { type WeeklyChartEntry } from '../components/WeeklyChart';
@@ -221,7 +222,7 @@ export default function ProgressScreen() {
                         <li key={i}>{step}</li>
                       ))}
                     </ol>
-                    <p className="protocol-note">{rec.protocol.note}</p>
+                    <ProtocolWhy text={rec.protocol.note} />
                     {guideCard && (
                       <button
                         type="button"

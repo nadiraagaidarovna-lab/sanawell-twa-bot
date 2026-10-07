@@ -2,7 +2,7 @@
   max-width: 520px;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: 12px 20px 0;
+  padding: calc(12px + var(--sw-safe-top)) 20px 0;
   display: flex;
   flex-direction: column;
   color: var(--sw-v3-ink);
@@ -35,7 +35,7 @@
 .sw-onboarding-fields input { min-width: 0; width: 100%; min-height: 52px; padding: 10px 12px; border: 1px solid var(--sw-v3-ink-soft); border-radius: 12px; color: var(--sw-v3-ink); background: var(--sw-v3-bg); }
 .sw-onboarding-fields input::placeholder { color: var(--sw-v3-ink-soft); opacity: 1; }
 .sw-onboarding-fields p { margin: 0; font-size: 16px; }
-.sw-onboarding-footer { position: sticky; bottom: 0; padding: 16px 0 max(16px, env(safe-area-inset-bottom)); background: var(--sw-v3-bg); }
+.sw-onboarding-footer { position: sticky; bottom: 0; padding: 16px 0 calc(16px + var(--sw-safe-bottom)); background: var(--sw-v3-bg); }
 .sw-onboarding-primary { width: 100%; min-height: 54px; padding: 14px 16px; border: 0; border-radius: 16px; background: var(--sw-primary); color: var(--sw-primary-text); font: inherit; font-weight: 600; }
 .sw-onboarding-primary:disabled { background: var(--sw-primary-soft); color: var(--sw-v3-ink-soft); cursor: not-allowed; }
 .sw-onboarding-primary:not(:disabled):hover { background: var(--sw-primary-hover); }

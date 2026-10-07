@@ -8,6 +8,7 @@
 // загрузка и исправление отметки сохраняют прежнее поведение. На форме закреплённая
 // панель сохранения заменяет нативную MainButton только для Check-in.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useUnsavedWork } from '../lib/buildCheck';
 import { hapticFeedbackNotificationOccurred } from '@telegram-apps/sdk';
 import NumericSelector from '../components/NumericSelector';
 import HotFlashesSelector from '../components/HotFlashesSelector';
@@ -72,6 +73,8 @@ export default function CheckinScreen({ embedded = false, onSaved, onFormActiveC
   const [answered, setAnswered] = useState({ sleep: false, mood: false, memory: false });
   const unanswered = [!answered.sleep && 'Сон', !answered.mood && 'Настроение', !answered.memory && 'Ясность'].filter(Boolean);
   const canSave = unanswered.length === 0;
+  // Scores or a comment chosen but not saved yet: an app update waits for them.
+  useUnsavedWork(view === 'form' && (answered.sleep || answered.mood || answered.memory || comment.trim() !== '' || energy !== null || hotFlashes !== null));
 
   useEffect(() => {
     onFormActiveChange?.(view === 'form');

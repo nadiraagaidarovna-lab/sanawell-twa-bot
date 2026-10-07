@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useUnsavedWork } from '../../lib/buildCheck';
 import logo from '../../assets/sanawell-logo.png';
 import { getTelegramFirstName } from '../../lib/telegram';
 import { useBackButton } from '../../lib/useBackButton';
@@ -136,6 +137,13 @@ export default function OnboardingFlow({ onCheckin, consentOnly = false, editTop
   const stepError = (index: number, e: unknown) => {
     if (full) track({ name: 'onboarding_error', step: index + 1, errorKind: errorKindOf(e) });
   };
+
+  // Answers on the current step that are not on the server yet: an app update waits for them.
+  useUnsavedWork(loadStatus === 'ready' && (
+    (step === STEP.consent && (terms || privacy))
+    || name.trim() !== (saved.name ?? '')
+    || !sameSet(topics, saved.topics)
+    || priority !== saved.priority));
 
   const enabled = loadStatus === 'ready' && !busy && (
     step === STEP.consent ? terms && privacy

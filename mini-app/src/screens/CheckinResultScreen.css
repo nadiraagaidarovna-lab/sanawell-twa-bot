@@ -3,7 +3,7 @@
   max-width: 480px;
   min-height: 100dvh;
   margin: 0 auto;
-  padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding: calc(16px + var(--sw-safe-top)) 16px calc(24px + var(--sw-safe-bottom));
   background: #fbf7f2;
   color: #24211d;
   font-size: 18px;

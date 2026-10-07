@@ -21,6 +21,7 @@ import { clearTechniquesTarget, peekTechniquesTarget, type TechniquesTarget } fr
 import { clearPendingActionMaterial, peekPendingActionMaterial, type TodayMaterial } from '../lib/todayAction';
 import { useNavigation } from '../lib/useNavigation';
 import ActionFeedback from '../components/ActionFeedback';
+import ProtocolWhy from '../components/ProtocolWhy';
 
 interface Protocol {
   id: string;
@@ -108,7 +109,7 @@ export default function TechniquesScreen() {
                       <li key={i}>{step}</li>
                     ))}
                   </ol>
-                  <p className="protocol-note">{protocol.note}</p>
+                  <ProtocolWhy text={protocol.note} />
                 </div>
               ))}
             </div>
